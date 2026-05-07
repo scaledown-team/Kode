@@ -62,24 +62,42 @@ export SCALEDOWN_API_KEY="your-key-here"
 ```
 
 **3. Register the MCP server**
+
+For personal use (stored in `~/.claude.json`):
 ```bash
-claude mcp add scaledown -- node /path/to/scaledown-claude-plugin/dist/src/index.js
+claude mcp add scaledown --transport stdio \
+  -- node /path/to/scaledown-claude-plugin/dist/src/index.js
+```
+
+To share with your team (stored in `.mcp.json`, commit this file):
+```bash
+claude mcp add scaledown --transport stdio --scope project \
+  -- npx -y @scaledown/claude-plugin
 ```
 
 **4. Add the hook**
 
-In your project's `.claude/settings.json`:
+In `.claude/settings.json` at your project root (create if it doesn't exist):
 ```json
 {
   "hooks": {
     "UserPromptSubmit": [
       {
-        "type": "command",
-        "command": "node /path/to/scaledown-claude-plugin/dist/hooks/user-prompt-submit.js"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "scaledown-claude-hook"
+          }
+        ]
       }
     ]
   }
 }
+```
+
+If you cloned the repo instead of installing globally, use the full path:
+```json
+"command": "node /path/to/scaledown-claude-plugin/dist/hooks/user-prompt-submit.js"
 ```
 
 ---
@@ -88,7 +106,7 @@ In your project's `.claude/settings.json`:
 
 ### Automatic (hook)
 
-Nothing to do — the hook fires on every prompt. You'll see the intent hint prepended to your prompts in Claude's context, and large retrieval queries are silently compressed before they reach the model.
+Nothing to do — the hook fires on every prompt. You'll see the intent hint in Claude's context, and large retrieval queries are silently compressed before they reach the model.
 
 ```
 [Scaledown intent: search (82%)]

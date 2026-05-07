@@ -94,7 +94,14 @@ async function main(): Promise<void> {
     const client = new ScaledownClient(config.apiKey);
     const result = await client.summarize(
       text,
-      "Summarize this Claude Code session. Preserve all technical details: file paths, code changes, commands run, decisions made, and any open issues. Be concise but complete."
+      `Structure the summary with these sections:
+1. Task Overview - the user's core request, success criteria, and any clarifications or constraints
+2. Current State - what has been completed, files created/modified (with full paths), key outputs or artifacts
+3. Important Discoveries - technical constraints uncovered, decisions made and their rationale, errors encountered and how they were resolved, approaches that didn't work and why
+4. Next Steps - specific actions needed to complete the task, blockers or open questions, priority order
+5. Context to Preserve - user preferences or style requirements, domain-specific details, any promises made to the user
+
+Include full file paths and code snippets where relevant. Be concise but complete — err on the side of including information that would prevent duplicate work or repeated mistakes.`
     );
 
     process.stderr.write(

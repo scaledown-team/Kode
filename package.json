@@ -1,6 +1,6 @@
 {
   "name": "@scaledown/claude-plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Claude Code plugin for Scaledown AI context optimization",
   "type": "module",
   "engines": {
@@ -35,7 +35,9 @@
   "jest": {
     "preset": "ts-jest/presets/default-esm",
     "testEnvironment": "node",
-    "extensionsToTreatAsEsm": [".ts"],
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1"
     },
@@ -45,7 +47,9 @@
         {
           "useESM": true,
           "diagnostics": {
-            "ignoreCodes": ["TS151002"]
+            "ignoreCodes": [
+              "TS151002"
+            ]
           }
         }
       ]

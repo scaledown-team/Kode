@@ -68,6 +68,9 @@ async function main(): Promise<void> {
     const topScore = classification.scores[classification.top_label];
     const hint = `[Scaledown intent: ${classification.top_label} (${Math.round(topScore * 100)}%)]`;
     modifiedPrompt = `${hint}\n${modifiedPrompt}`;
+    process.stderr.write(
+      `scaledown: intent=${classification.top_label} (${Math.round(topScore * 100)}%)\n`
+    );
   } catch (err) {
     process.stderr.write(
       `scaledown: classify failed, skipping hint: ${String(err)}\n`
@@ -78,7 +81,9 @@ async function main(): Promise<void> {
   const shouldCompress =
     config.niahDisable || isNiahQuery(prompt, config.compressThreshold);
 
-  if (shouldCompress) {
+  if (!shouldCompress) {
+    process.stderr.write(`scaledown: compression skipped (prompt below threshold or not retrieval-style)\n`);
+  } else {
     try {
       const result = await client.compress(
         prompt,
@@ -87,8 +92,9 @@ async function main(): Promise<void> {
       );
       const saved =
         result.original_prompt_tokens - result.compressed_prompt_tokens;
+      const pct = Math.round((saved / result.original_prompt_tokens) * 100);
       process.stderr.write(
-        `scaledown: compressed prompt (${result.original_prompt_tokens} → ${result.compressed_prompt_tokens} tokens, saved ${saved})\n`
+        `scaledown: compressed prompt (${result.original_prompt_tokens} → ${result.compressed_prompt_tokens} tokens, -${pct}%)\n`
       );
 
       // Re-apply the intent hint on top of the compressed output

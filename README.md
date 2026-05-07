@@ -141,6 +141,25 @@ Use sd_extract to pull out all function names, file paths, and error codes from 
 
 ## Configuration
 
+### Changing your API key
+
+Re-run setup to replace the key automatically:
+```bash
+scaledown-claude setup
+```
+
+Or edit your shell config directly:
+```bash
+# Open ~/.zshrc (or ~/.bashrc)
+# Find and update:
+export SCALEDOWN_API_KEY="sk-your-new-key"
+
+# Reload
+source ~/.zshrc
+```
+
+### Environment variables
+
 Set these environment variables to tune behavior:
 
 | Variable | Default | Description |

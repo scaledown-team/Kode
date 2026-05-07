@@ -9,7 +9,8 @@
   "bin": {
     "scaledown-claude": "./dist/bin/setup.js",
     "scaledown-claude-hook": "./dist/hooks/user-prompt-submit.js",
-    "scaledown-claude-post-tool-use": "./dist/hooks/post-tool-use.js"
+    "scaledown-claude-post-tool-use": "./dist/hooks/post-tool-use.js",
+    "scaledown-claude-git-attribution": "./dist/hooks/git-attribution.js"
   },
   "main": "./dist/src/index.js",
   "files": [

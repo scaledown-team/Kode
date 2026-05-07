@@ -10,6 +10,15 @@
       {
         "type": "command",
         "command": "node dist/hooks/post-tool-use.js"
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node dist/hooks/git-attribution.js"
+          }
+        ]
       }
     ]
   }

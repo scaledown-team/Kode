@@ -2,14 +2,24 @@
   "hooks": {
     "UserPromptSubmit": [
       {
-        "type": "command",
-        "command": "node dist/hooks/user-prompt-submit.js"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/Users/soham/.nvm/versions/node/v21.6.1/lib/node_modules/@scaledown/claude-plugin/dist/hooks/user-prompt-submit.js\""
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
-        "type": "command",
-        "command": "node dist/hooks/post-tool-use.js"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node dist/hooks/post-tool-use.js"
+          }
+        ]
       },
       {
         "matcher": "Bash",

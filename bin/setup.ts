@@ -67,6 +67,27 @@ function registerMcp(): void {
   }
 }
 
+function writeAgent(): void {
+  const agentsDir = resolve(process.cwd(), ".claude", "agents");
+  const agentPath = resolve(agentsDir, "scaledown.md");
+
+  if (!existsSync(agentsDir)) {
+    execSync(`mkdir -p "${agentsDir}"`);
+  }
+
+  writeFileSync(
+    agentPath,
+    `---
+name: scaledown
+description: Scaledown-enhanced agent — context compression and intent routing active
+model: inherit
+---
+`,
+    "utf8"
+  );
+  console.log(`  ✓ Agent definition written to ${agentPath}`);
+}
+
 function writeHooks(): void {
   const promptHookCommand = `node "${resolve(DIST_ROOT, "hooks", "user-prompt-submit.js")}"`;
   const postToolHookCommand = `node "${resolve(DIST_ROOT, "hooks", "post-tool-use.js")}"`;
@@ -85,13 +106,14 @@ function writeHooks(): void {
   hooks.UserPromptSubmit = [{ type: "command", command: promptHookCommand }];
   hooks.PostToolUse = [{ type: "command", command: postToolHookCommand }];
   settings.hooks = hooks;
+  settings.agent = "scaledown";
 
   const settingsDir = resolve(process.cwd(), ".claude");
   if (!existsSync(settingsDir)) {
     execSync(`mkdir -p "${settingsDir}"`);
   }
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf8");
-  console.log(`  ✓ Hooks written to ${settingsPath}`);
+  console.log(`  ✓ Hooks and agent written to ${settingsPath}`);
 }
 
 async function main(): Promise<void> {
@@ -146,8 +168,9 @@ async function main(): Promise<void> {
   console.log("\nRegistering MCP server...");
   registerMcp();
 
-  // Step 6: Write hooks
-  console.log("\nConfiguring hooks...");
+  // Step 6: Write agent definition + hooks
+  console.log("\nConfiguring agent and hooks...");
+  writeAgent();
   writeHooks();
 
   // Step 7: Summary
@@ -155,6 +178,7 @@ async function main(): Promise<void> {
 ✅ Scaledown is ready!
 
 Active features:
+  • "scaledown" badge shown in the Claude Code text input
   • Intent hint prepended to every prompt (helps Claude pick the right tool)
   • Auto-compression for large NIAH-style queries (threshold: ${process.env.SCALEDOWN_COMPRESS_THRESHOLD ?? "10000"} tokens, rate: ${process.env.SCALEDOWN_COMPRESS_RATE ?? "0.3"})
   • Post-tool output compression — large tool results are compressed before entering context (threshold: ${process.env.SCALEDOWN_POST_TOOL_THRESHOLD ?? "4000"} tokens)

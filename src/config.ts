@@ -1,3 +1,9 @@
+import { existsSync, readFileSync } from "fs";
+import { homedir } from "os";
+import { resolve } from "path";
+
+export const CONFIG_FILE = resolve(homedir(), ".scaledown", "config.json");
+
 export interface Config {
   apiKey: string;
   compressThreshold: number;
@@ -7,8 +13,19 @@ export interface Config {
   postToolThreshold: number;
 }
 
+function readConfigFile(): { apiKey?: string } {
+  try {
+    if (existsSync(CONFIG_FILE)) {
+      return JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
+    }
+  } catch {
+    // Malformed config file — ignore
+  }
+  return {};
+}
+
 export function loadConfig(): Config {
-  const apiKey = process.env.SCALEDOWN_API_KEY;
+  const apiKey = process.env.SCALEDOWN_API_KEY ?? readConfigFile().apiKey;
   if (!apiKey) {
     throw new Error(
       "SCALEDOWN_API_KEY is not set.\n" +

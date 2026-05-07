@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { createInterface } from "readline";
 import { execSync } from "child_process";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { ScaledownClient } from "../src/client.js";
+import { CONFIG_FILE } from "../src/config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST_ROOT = resolve(__dirname, "..");
@@ -47,9 +48,14 @@ function storeApiKey(apiKey: string): void {
     writeFileSync(rcFile, existing + exportLine, "utf8");
   }
 
+  // Write to config file so hooks can read it without a sourced shell
+  const configDir = resolve(CONFIG_FILE, "..");
+  if (!existsSync(configDir)) mkdirSync(configDir, { recursive: true });
+  writeFileSync(CONFIG_FILE, JSON.stringify({ apiKey }, null, 2) + "\n", "utf8");
+
   // Make available in the current process immediately
   process.env.SCALEDOWN_API_KEY = apiKey;
-  console.log(`  ✓ API key saved to ${rcFile}`);
+  console.log(`  ✓ API key saved to ${rcFile} and ${CONFIG_FILE}`);
 }
 
 function registerMcp(): void {
@@ -104,9 +110,11 @@ function writeHooks(): void {
   }
 
   const hooks = (settings.hooks as Record<string, unknown[]>) ?? {};
-  hooks.UserPromptSubmit = [{ type: "command", command: promptHookCommand }];
+  hooks.UserPromptSubmit = [
+    { matcher: "", hooks: [{ type: "command", command: promptHookCommand }] },
+  ];
   hooks.PostToolUse = [
-    { type: "command", command: postToolHookCommand },
+    { matcher: "", hooks: [{ type: "command", command: postToolHookCommand }] },
     { matcher: "Bash", hooks: [{ type: "command", command: gitAttributionCommand }] },
   ];
   settings.hooks = hooks;
@@ -178,8 +186,13 @@ async function main(): Promise<void> {
   writeHooks();
 
   // Step 7: Summary
+  const rcFile2 = detectRcFile();
   console.log(`
 ✅ Scaledown is ready!
+
+  To use the API key in your current terminal session, run:
+    source ${rcFile2}
+  (New terminal windows will pick it up automatically.)
 
 Active features:
   • "scaledown" badge shown in the Claude Code text input

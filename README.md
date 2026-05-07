@@ -24,7 +24,7 @@ On top of that, Claude gains four new tools it can call on demand:
 
 - Node.js 18 or later
 - [Claude Code](https://claude.ai/code) CLI installed
-- A Scaledown API key — get one free at [scaledown.ai/api-keys](https://scaledown.ai/api-keys)
+- A Scaledown API key — get one free at [scaledown.ai/dashboard](https://scaledown.ai/dashboard)
 
 ---
 

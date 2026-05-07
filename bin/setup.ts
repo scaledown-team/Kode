@@ -135,9 +135,9 @@ async function main(): Promise<void> {
   console.log("Opening scaledown.ai to get your API key...");
   try {
     const { default: open } = await import("open");
-    await open("https://scaledown.ai/api-keys");
+    await open("https://scaledown.ai/dashboard");
   } catch {
-    console.log("  Visit https://scaledown.ai/api-keys to get your API key.");
+    console.log("  Visit https://scaledown.ai/dashboard to get your API key.");
   }
 
   // Step 2: Prompt for key
@@ -162,7 +162,7 @@ async function main(): Promise<void> {
         : null;
     if (status === 401) {
       console.error(
-        "  ✗ Invalid API key. Check your key at https://scaledown.ai/api-keys"
+        "  ✗ Invalid API key. Check your key at https://scaledown.ai/dashboard"
       );
       process.exit(1);
     }

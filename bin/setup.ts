@@ -91,7 +91,6 @@ model: inherit
 function writeHooks(): void {
   const promptHookCommand = `node "${resolve(DIST_ROOT, "hooks", "user-prompt-submit.js")}"`;
   const postToolHookCommand = `node "${resolve(DIST_ROOT, "hooks", "post-tool-use.js")}"`;
-  const preCompactHookCommand = `node "${resolve(DIST_ROOT, "hooks", "pre-compact.js")}"`;
   const settingsPath = resolve(process.cwd(), ".claude", "settings.json");
 
   let settings: Record<string, unknown> = {};
@@ -111,7 +110,6 @@ function writeHooks(): void {
       hooks: [{ type: "command", command: postToolHookCommand }],
     },
   ];
-  hooks.PreCompact = [{ type: "command", command: preCompactHookCommand }];
   settings.hooks = hooks;
   settings.agent = "scaledown";
 
@@ -187,7 +185,6 @@ async function main(): Promise<void> {
 Active features:
   • "scaledown" badge shown in the Claude Code text input
   • Co-Authored-By: Scaledown trailer added to every git commit
-  • Context compaction handled by Scaledown summarization (replaces Claude's default)
   • Intent hint prepended to every prompt (helps Claude pick the right tool)
   • Auto-compression for large NIAH-style queries (threshold: ${process.env.SCALEDOWN_COMPRESS_THRESHOLD ?? "10000"} tokens, rate: ${process.env.SCALEDOWN_COMPRESS_RATE ?? "0.3"})
 

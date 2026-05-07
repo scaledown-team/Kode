@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "command": "node dist/hooks/user-prompt-submit.js"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "node dist/hooks/post-tool-use.js"
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node dist/hooks/git-attribution.js"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -2,10 +2,34 @@
 import { ScaledownClient } from "../src/client.js";
 import { loadConfig } from "../src/config.js";
 import { isNiahQuery } from "../src/niah.js";
+import { addSaving } from "../src/stats.js";
+
+interface ContextWindow {
+  current_tokens: number;
+  max_tokens: number;
+}
 
 interface HookInput {
   prompt?: string;
+  context_window?: ContextWindow;
+  session_id?: string;
   [key: string]: unknown;
+}
+
+function renderProgressBar(pct: number, width = 20): string {
+  const filled = Math.round((pct / 100) * width);
+  const bar = "█".repeat(filled) + "░".repeat(width - filled);
+  return `[${bar}] ${pct}%`;
+}
+
+function logContextProgress(contextWindow: ContextWindow, compactThreshold: number): void {
+  const { current_tokens, max_tokens } = contextWindow;
+  if (max_tokens === 0) return;
+  const pct = Math.round((current_tokens / max_tokens) * 100);
+  const bar = renderProgressBar(pct);
+  const tokenStr = `${current_tokens.toLocaleString()} / ${max_tokens.toLocaleString()} tokens`;
+  const suffix = pct >= compactThreshold ? " ⚡ compaction imminent" : "";
+  process.stderr.write(`scaledown: ${bar}  ${tokenStr}${suffix}\n`);
 }
 
 const INTENT_LABELS = [
@@ -44,6 +68,7 @@ async function main(): Promise<void> {
   const raw = await readStdin();
   const input: HookInput = JSON.parse(raw || "{}");
   const prompt = input.prompt;
+  const sessionId = input.session_id ?? "unknown";
 
   if (!prompt) {
     process.stdout.write("{}");
@@ -57,6 +82,10 @@ async function main(): Promise<void> {
     // No API key configured — pass through silently
     process.stdout.write("{}");
     return;
+  }
+
+  if (config.showProgress && input.context_window) {
+    logContextProgress(input.context_window, config.compactThreshold);
   }
 
   const client = new ScaledownClient(config.apiKey);
@@ -96,6 +125,7 @@ async function main(): Promise<void> {
       process.stderr.write(
         `scaledown: compressed prompt (${result.original_prompt_tokens} → ${result.compressed_prompt_tokens} tokens, -${pct}%)\n`
       );
+      addSaving(sessionId, saved);
 
       // Re-apply the intent hint on top of the compressed output
       const classifyHintMatch = modifiedPrompt.match(

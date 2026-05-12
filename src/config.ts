@@ -11,6 +11,8 @@ export interface Config {
   niahDisable: boolean;
   postToolDisable: boolean;
   postToolThreshold: number;
+  compactThreshold: number;
+  showProgress: boolean;
 }
 
 function readConfigFile(): { apiKey?: string } {
@@ -51,6 +53,13 @@ export function loadConfig(): Config {
     ? parseInt(postToolThresholdRaw, 10)
     : 4000;
 
+  const compactThresholdRaw = process.env.SCALEDOWN_COMPACT_THRESHOLD;
+  const compactThreshold = compactThresholdRaw
+    ? parseInt(compactThresholdRaw, 10)
+    : 50;
+
+  const showProgress = process.env.SCALEDOWN_SHOW_PROGRESS !== "false";
+
   return {
     apiKey,
     compressThreshold,
@@ -58,5 +67,7 @@ export function loadConfig(): Config {
     niahDisable,
     postToolDisable,
     postToolThreshold,
+    compactThreshold,
+    showProgress,
   };
 }

@@ -61,24 +61,24 @@ function storeApiKey(apiKey: string): void {
 function registerMcp(): void {
   const entryPoint = resolve(DIST_ROOT, "src", "index.js");
   try {
-    execSync(`claude mcp add scaledown -- node "${entryPoint}"`, {
+    execSync(`claude mcp add --scope user scaledown -- node "${entryPoint}"`, {
       stdio: "inherit",
     });
-    console.log("  ✓ MCP server registered with Claude Code");
+    console.log("  ✓ MCP server registered globally with Claude Code");
   } catch {
     console.warn(
       "  ⚠ Could not register MCP server automatically.\n" +
-        `    Run manually: claude mcp add scaledown -- node "${entryPoint}"`
+        `    Run manually: claude mcp add --scope user scaledown -- node "${entryPoint}"`
     );
   }
 }
 
 function writeAgent(): void {
-  const agentsDir = resolve(process.cwd(), ".claude", "agents");
+  const agentsDir = resolve(homedir(), ".claude", "agents");
   const agentPath = resolve(agentsDir, "scaledown.md");
 
   if (!existsSync(agentsDir)) {
-    execSync(`mkdir -p "${agentsDir}"`);
+    mkdirSync(agentsDir, { recursive: true });
   }
 
   writeFileSync(
@@ -97,8 +97,9 @@ model: inherit
 function writeHooks(): void {
   const promptHookCommand = `node "${resolve(DIST_ROOT, "hooks", "user-prompt-submit.js")}"`;
   const postToolHookCommand = `node "${resolve(DIST_ROOT, "hooks", "post-tool-use.js")}"`;
-  const gitAttributionCommand = `node "${resolve(DIST_ROOT, "hooks", "git-attribution.js")}"`;
-  const settingsPath = resolve(process.cwd(), ".claude", "settings.json");
+  const preCompactHookCommand = `node "${resolve(DIST_ROOT, "hooks", "pre-compact.js")}"`;
+  const statusCommand = `node "${resolve(DIST_ROOT, "hooks", "status.js")}"`;
+  const settingsPath = resolve(homedir(), ".claude", "settings.json");
 
   let settings: Record<string, unknown> = {};
   if (existsSync(settingsPath)) {
@@ -115,17 +116,31 @@ function writeHooks(): void {
   ];
   hooks.PostToolUse = [
     { matcher: "", hooks: [{ type: "command", command: postToolHookCommand }] },
-    { matcher: "Bash", hooks: [{ type: "command", command: gitAttributionCommand }] },
+  ];
+  hooks.PreCompact = [
+    { matcher: "", hooks: [{ type: "command", command: preCompactHookCommand }] },
   ];
   settings.hooks = hooks;
-  settings.agent = "scaledown";
 
-  const settingsDir = resolve(process.cwd(), ".claude");
+  // Status line: shows token savings below the Claude Code text input bar
+  settings.statusLine = {
+    type: "command",
+    command: statusCommand,
+    refreshInterval: 5000,
+  };
+
+  // Set Claude Code's auto-compact threshold to match SCALEDOWN_COMPACT_THRESHOLD
+  const compactThreshold = process.env.SCALEDOWN_COMPACT_THRESHOLD ?? "50";
+  const env = (settings.env as Record<string, string>) ?? {};
+  env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE = compactThreshold;
+  settings.env = env;
+
+  const settingsDir = resolve(homedir(), ".claude");
   if (!existsSync(settingsDir)) {
-    execSync(`mkdir -p "${settingsDir}"`);
+    mkdirSync(settingsDir, { recursive: true });
   }
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf8");
-  console.log(`  ✓ Hooks and agent written to ${settingsPath}`);
+  console.log(`  ✓ Hooks written to ${settingsPath}`);
 }
 
 async function main(): Promise<void> {
@@ -198,10 +213,15 @@ Active features:
   • "scaledown" badge shown in the Claude Code text input
   • Co-Authored-By: Scaledown trailer added to every git commit
   • Intent hint prepended to every prompt (helps Claude pick the right tool)
+  • Context progress bar shown on every prompt (e.g. [████░░░░░░] 42%)
   • Auto-compression for large NIAH-style queries (threshold: ${process.env.SCALEDOWN_COMPRESS_THRESHOLD ?? "10000"} tokens, rate: ${process.env.SCALEDOWN_COMPRESS_RATE ?? "0.3"})
   • Post-tool output compression — large tool results are compressed before entering context (threshold: ${process.env.SCALEDOWN_POST_TOOL_THRESHOLD ?? "4000"} tokens)
+  • Context compaction via Scaledown at ${process.env.SCALEDOWN_COMPACT_THRESHOLD ?? "25"}% usage (replaces Claude's default summarization)
+  • Token savings counter shown below the Claude Code text input (updates every 5s)
 
 Environment variables:
+  SCALEDOWN_COMPACT_THRESHOLD=N      — context % that triggers compaction (default: 50)
+  SCALEDOWN_SHOW_PROGRESS=false      — disable the per-turn context progress bar
   SCALEDOWN_POST_TOOL_DISABLE=true   — disable post-tool compression
   SCALEDOWN_POST_TOOL_THRESHOLD=N    — token threshold for tool output compression (default: 4000)
 

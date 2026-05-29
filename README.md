@@ -23,14 +23,20 @@ On top of that, Claude gains four new tools it can call on demand:
 ## Requirements
 
 - Node.js 18 or later
-- [Claude Code](https://claude.ai/code) CLI installed
 - A Scaledown API key — get one free at [scaledown.ai/dashboard](https://scaledown.ai/dashboard)
+- One of: [Claude Code](https://claude.ai/code), [Cursor](https://cursor.com), or [OpenAI Codex CLI](https://github.com/openai/codex)
 
 ---
 
 ## Installation
 
-### Option A: npm (recommended)
+> **Supported clients:** Claude Code · Cursor · OpenAI Codex CLI
+>
+> The MCP tools (`sd_compress`, `sd_summarize`, `sd_classify`, `sd_extract`) work in all three clients. Automatic prompt hooks (`UserPromptSubmit`, `PreCompact`) are Claude Code-only — see the [feature comparison](#feature-comparison) below.
+
+### Claude Code
+
+#### Option A: npm (recommended)
 
 ```bash
 npm install -g @scaledown/claude-plugin
@@ -46,7 +52,7 @@ The setup wizard will:
 
 Restart Claude Code and you're done.
 
-### Option B: manual
+#### Option B: manual
 
 **1. Clone and build**
 ```bash
@@ -99,6 +105,81 @@ If you cloned the repo instead of installing globally, use the full path:
 ```json
 "command": "node /path/to/scaledown-claude-plugin/dist/hooks/user-prompt-submit.js"
 ```
+
+### Cursor
+
+**1. Install the package**
+```bash
+npm install -g @scaledown/claude-plugin
+```
+
+**2. Set your API key**
+```bash
+export SCALEDOWN_API_KEY="your-key-here"
+# Add the above line to ~/.zshrc or ~/.bashrc to persist it
+```
+
+**3. Add the MCP server**
+
+Create `.cursor/mcp.json` in your project root (or `~/.cursor/mcp.json` for global use):
+
+```json
+{
+  "mcpServers": {
+    "scaledown": {
+      "command": "npx",
+      "args": ["-y", "@scaledown/claude-plugin"],
+      "env": {
+        "SCALEDOWN_API_KEY": "your-key-here"
+      }
+    }
+  }
+}
+```
+
+**4. Restart Cursor.** The four Scaledown tools will be available in Agent mode.
+
+> Cursor does not support hooks, so automatic prompt compression and intent classification will not fire. Use the tools on demand.
+
+---
+
+### OpenAI Codex CLI
+
+**1. Install the package**
+```bash
+npm install -g @scaledown/claude-plugin
+```
+
+**2. Add the MCP server**
+```bash
+codex mcp add scaledown --env SCALEDOWN_API_KEY=your-key-here -- npx -y @scaledown/claude-plugin
+```
+
+This writes to `~/.codex/config.toml`. To verify:
+```toml
+[mcp_servers.scaledown]
+command = "npx"
+args = ["-y", "@scaledown/claude-plugin"]
+
+[mcp_servers.scaledown.env]
+SCALEDOWN_API_KEY = "your-key-here"
+```
+
+> Codex CLI does not support `UserPromptSubmit` or `PreCompact` hooks. Use the tools on demand.
+
+---
+
+## Feature comparison
+
+| Feature | Claude Code | Cursor | Codex CLI |
+|---|---|---|---|
+| `sd_compress` tool | ✅ | ✅ | ✅ |
+| `sd_summarize` tool | ✅ | ✅ | ✅ |
+| `sd_classify` tool | ✅ | ✅ | ✅ |
+| `sd_extract` tool | ✅ | ✅ | ✅ |
+| Auto intent hints on every prompt | ✅ | ❌ | ❌ |
+| Auto compression (large prompts) | ✅ | ❌ | ❌ |
+| Auto summarization on compaction | ✅ | ❌ | ❌ |
 
 ---
 

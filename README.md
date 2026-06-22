@@ -1,58 +1,80 @@
-# Scaledown Claude Code Plugin
+# Kode by Scaledown
 
-Optimize your Claude Code sessions with [Scaledown](https://scaledown.ai) — automatic context compression, conversation summarization, intent-aware tool routing, and named entity extraction.
+**The context optimization layer for AI coding agents.**
+
+50-70% fewer tokens · intent-aware routing · MCP server · 4 tools · works in Claude Code, Cursor & Codex CLI
+
+Kode compresses and routes everything your coding agent reads (large contexts,
+long conversations, pasted codebases) before it reaches the model. Same answers,
+a fraction of the tokens.
+
+---
 
 ## What it does
 
-Every time you submit a prompt, the plugin:
+On every prompt (Claude Code), Kode:
 
-1. **Classifies your intent** and prepends a one-line hint (e.g. `[Scaledown intent: file_read (87%)]`) so Claude picks the right tool without guessing
-2. **Compresses large contexts** automatically when you paste in a big codebase and ask a retrieval-style question — reducing token usage by 50–70% before the prompt reaches Claude
+1. **Classifies your intent** and prepends a one-line hint
+   (e.g. `[Scaledown intent: file_read (87%)]`) so the agent picks the right tool
+   without guessing.
+2. **Compresses large contexts** automatically when you paste a big codebase and
+   ask a retrieval-style question, cutting token usage 50-70% before the prompt
+   reaches the model.
 
-On top of that, Claude gains four new tools it can call on demand:
+On top of that, your agent gains four tools it can call on demand in **all three clients**:
 
 | Tool | What it does |
 |---|---|
 | `sd_compress` | Compress a large context block before a needle-in-a-haystack query |
-| `sd_summarize` | Abstractively summarize text — useful for compacting long conversations |
-| `sd_classify` | Classify text against custom labels (e.g. bug vs. feature vs. question) |
+| `sd_summarize` | Abstractively summarize text to compact long conversations |
+| `sd_classify` | Classify text against custom labels (bug vs. feature vs. question) |
 | `sd_extract` | Extract named entities or structured data from any text |
 
 ---
 
-## Requirements
+## How it works (30 seconds)
 
-- Node.js 18 or later
-- A Scaledown API key — get one free at [scaledown.ai/dashboard](https://scaledown.ai/dashboard)
-- One of: [Claude Code](https://claude.ai/code), [Cursor](https://cursor.com), or [OpenAI Codex CLI](https://github.com/openai/codex)
+```
+your prompt ──▶ [intent classify] ──▶ [needle-in-haystack?] ──▶ compress ──▶ agent
+                     │                        │
+                 one-line hint          /compress/raw/  (50-70% smaller)
+```
+
+- **Intent hints** route the agent to the right tool, cheaply, on every prompt.
+- **Auto-compression** only fires on prompts that are both *large* and
+  *retrieval-intent*. Conversational prompts and code you're asking it to write
+  are left untouched.
+- **On-demand tools** give you manual control in any client.
 
 ---
 
-## Installation
+## Get started (60 seconds)
 
 > **Supported clients:** Claude Code · Cursor · OpenAI Codex CLI
 >
-> The MCP tools (`sd_compress`, `sd_summarize`, `sd_classify`, `sd_extract`) work in all three clients. Automatic prompt hooks (`UserPromptSubmit`, `PreCompact`) are Claude Code-only — see the [feature comparison](#feature-comparison) below.
+> The four MCP tools work everywhere. Automatic prompt hooks
+> (`UserPromptSubmit`, `PreCompact`) are **Claude Code-only**. See the
+> [feature comparison](#feature-comparison).
 
-### Claude Code
+**Requirements**
 
-#### Option A: npm (recommended)
+- Node.js 18 or later
+- A Scaledown API key, free at [scaledown.ai/dashboard](https://scaledown.ai/dashboard)
+- One of: [Claude Code](https://claude.ai/code) · [Cursor](https://cursor.com) · [Codex CLI](https://github.com/openai/codex)
+
+### Claude Code (recommended)
 
 ```bash
 npm install -g @scaledown/claude-plugin
 scaledown-claude setup
 ```
 
-The setup wizard will:
-1. Open your browser to get an API key
-2. Ask you to paste the key
-3. Save it to your shell config (`~/.zshrc`, `~/.bashrc`, etc.)
-4. Register the MCP server with Claude Code
-5. Add the `UserPromptSubmit` hook to your project's `.claude/settings.json`
+The wizard opens your browser for a key, saves it to your shell config, registers
+the MCP server, and adds the `UserPromptSubmit` hook. Restart Claude Code and
+you're done.
 
-Restart Claude Code and you're done.
-
-#### Option B: manual
+<details>
+<summary>Manual setup</summary>
 
 **1. Clone and build**
 ```bash
@@ -63,99 +85,70 @@ npm install && npm run build
 
 **2. Set your API key**
 ```bash
-export SCALEDOWN_API_KEY="your-key-here"
-# Add the above line to ~/.zshrc or ~/.bashrc to persist it
+export SCALEDOWN_API_KEY="your-key-here"   # add to ~/.zshrc or ~/.bashrc to persist
 ```
 
 **3. Register the MCP server**
 
-For personal use (stored in `~/.claude.json`):
+Personal use (`~/.claude.json`):
 ```bash
 claude mcp add scaledown --transport stdio \
   -- node /path/to/scaledown-claude-plugin/dist/src/index.js
 ```
 
-To share with your team (stored in `.mcp.json`, commit this file):
+Team use (`.mcp.json`, commit this file):
 ```bash
 claude mcp add scaledown --transport stdio --scope project \
   -- npx -y @scaledown/claude-plugin
 ```
 
-**4. Add the hook**
-
-In `.claude/settings.json` at your project root (create if it doesn't exist):
+**4. Add the hook** to `.claude/settings.json`:
 ```json
 {
   "hooks": {
     "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "scaledown-claude-hook"
-          }
-        ]
-      }
+      { "hooks": [ { "type": "command", "command": "scaledown-claude-hook" } ] }
     ]
   }
 }
 ```
-
-If you cloned the repo instead of installing globally, use the full path:
+If you cloned instead of installing globally, use the full path:
 ```json
 "command": "node /path/to/scaledown-claude-plugin/dist/hooks/user-prompt-submit.js"
 ```
+</details>
 
 ### Cursor
 
-**1. Install the package**
 ```bash
 npm install -g @scaledown/claude-plugin
-```
-
-**2. Set your API key**
-```bash
 export SCALEDOWN_API_KEY="your-key-here"
-# Add the above line to ~/.zshrc or ~/.bashrc to persist it
 ```
 
-**3. Add the MCP server**
-
-Create `.cursor/mcp.json` in your project root (or `~/.cursor/mcp.json` for global use):
-
+Create `.cursor/mcp.json` (or `~/.cursor/mcp.json` for global use):
 ```json
 {
   "mcpServers": {
     "scaledown": {
       "command": "npx",
       "args": ["-y", "@scaledown/claude-plugin"],
-      "env": {
-        "SCALEDOWN_API_KEY": "your-key-here"
-      }
+      "env": { "SCALEDOWN_API_KEY": "your-key-here" }
     }
   }
 }
 ```
+Restart Cursor. The four tools appear in Agent mode.
 
-**4. Restart Cursor.** The four Scaledown tools will be available in Agent mode.
-
-> Cursor does not support hooks, so automatic prompt compression and intent classification will not fire. Use the tools on demand.
-
----
+> Cursor doesn't support hooks, so auto-compression and intent hints won't fire.
+> Use the tools on demand.
 
 ### OpenAI Codex CLI
 
-**1. Install the package**
 ```bash
 npm install -g @scaledown/claude-plugin
-```
-
-**2. Add the MCP server**
-```bash
 codex mcp add scaledown --env SCALEDOWN_API_KEY=your-key-here -- npx -y @scaledown/claude-plugin
 ```
-
-This writes to `~/.codex/config.toml`. To verify:
+This writes to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.scaledown]
 command = "npx"
@@ -165,7 +158,7 @@ args = ["-y", "@scaledown/claude-plugin"]
 SCALEDOWN_API_KEY = "your-key-here"
 ```
 
-> Codex CLI does not support `UserPromptSubmit` or `PreCompact` hooks. Use the tools on demand.
+> Codex CLI doesn't support `UserPromptSubmit` / `PreCompact` hooks. Use the tools on demand.
 
 ---
 
@@ -173,10 +166,7 @@ SCALEDOWN_API_KEY = "your-key-here"
 
 | Feature | Claude Code | Cursor | Codex CLI |
 |---|---|---|---|
-| `sd_compress` tool | ✅ | ✅ | ✅ |
-| `sd_summarize` tool | ✅ | ✅ | ✅ |
-| `sd_classify` tool | ✅ | ✅ | ✅ |
-| `sd_extract` tool | ✅ | ✅ | ✅ |
+| `sd_compress` / `sd_summarize` / `sd_classify` / `sd_extract` | ✅ | ✅ | ✅ |
 | Auto intent hints on every prompt | ✅ | ❌ | ❌ |
 | Auto compression (large prompts) | ✅ | ❌ | ❌ |
 | Auto summarization on compaction | ✅ | ❌ | ❌ |
@@ -185,72 +175,33 @@ SCALEDOWN_API_KEY = "your-key-here"
 
 ## Usage
 
-### Automatic (hook)
-
-Nothing to do — the hook fires on every prompt. You'll see the intent hint in Claude's context, and large retrieval queries are silently compressed before they reach the model.
-
+**Automatic (Claude Code hook):** nothing to do; the hook fires on every prompt:
 ```
 [Scaledown intent: search (82%)]
 Find all places where we call the payments API
 ```
 
-### On-demand tools
-
-Ask Claude to use any of the four tools directly:
-
-**Compress a large context**
+**On-demand tools:** ask the agent directly:
 ```
 Use sd_compress to compress this before searching through it: [paste large codebase]
-```
-
-**Summarize a long conversation**
-```
-Use sd_summarize to condense this thread so we can keep working without hitting the context limit
-```
-
-**Classify text**
-```
+Use sd_summarize to condense this thread so we can keep working
 Use sd_classify to categorize these GitHub issues as bug, feature, or question
-```
-
-**Extract structured data**
-```
-Use sd_extract to pull out all function names, file paths, and error codes from this stack trace
+Use sd_extract to pull function names, file paths, and error codes from this stack trace
 ```
 
 ---
 
 ## Configuration
 
-### Changing your API key
-
-Re-run setup to replace the key automatically:
-```bash
-scaledown-claude setup
-```
-
-Or edit your shell config directly:
-```bash
-# Open ~/.zshrc (or ~/.bashrc)
-# Find and update:
-export SCALEDOWN_API_KEY="sk-your-new-key"
-
-# Reload
-source ~/.zshrc
-```
-
-### Environment variables
-
-Set these environment variables to tune behavior:
+Re-run `scaledown-claude setup` to swap your key, or edit your shell config directly.
 
 | Variable | Default | Description |
 |---|---|---|
-| `SCALEDOWN_API_KEY` | — | **Required.** Your Scaledown API key |
+| `SCALEDOWN_API_KEY` | (none) | **Required.** Your Scaledown API key |
 | `SCALEDOWN_COMPRESS_THRESHOLD` | `10000` | Token estimate above which auto-compression fires |
 | `SCALEDOWN_COMPRESS_RATE` | `0.3` | How aggressively to compress (0.3 = keep 30% of tokens) |
-| `SCALEDOWN_NIAH_DISABLE` | `false` | Set to `true` to compress all large prompts, not just retrieval-style ones |
+| `SCALEDOWN_NIAH_DISABLE` | `false` | `true` compresses all large prompts, not just retrieval-style |
 
-Example — compress more aggressively, lower threshold:
 ```bash
 export SCALEDOWN_COMPRESS_THRESHOLD=5000
 export SCALEDOWN_COMPRESS_RATE=0.2
@@ -260,11 +211,12 @@ export SCALEDOWN_COMPRESS_RATE=0.2
 
 ## How compression works
 
-The plugin uses a local heuristic to detect "needle-in-a-haystack" queries — prompts that are both large *and* retrieval-intent (containing keywords like `find`, `search`, `where`, `what does ... do`, etc.).
-
-When detected, the full prompt is sent to Scaledown's `/compress/raw/` endpoint, which rewrites it into a semantically equivalent but much shorter form. The compressed version replaces the original before Claude sees it.
-
-Conversational messages that happen to be long (e.g. a big code block you're asking Claude to write from scratch) are left alone.
+Kode uses a local heuristic to detect "needle-in-a-haystack" queries: prompts
+that are both large *and* retrieval-intent (`find`, `search`, `where`,
+`what does ... do`, etc.). When detected, the prompt is sent to Scaledown's
+`/compress/raw/` endpoint, which rewrites it into a semantically equivalent but
+much shorter form before the agent sees it. Long conversational prompts (e.g. code
+you're asking it to write from scratch) are left alone.
 
 ---
 
@@ -274,19 +226,17 @@ Conversational messages that happen to be long (e.g. a big code block you're ask
 git clone https://github.com/scaledown-team/scaledown-claude-plugin
 cd scaledown-claude-plugin
 npm install
-
-npm test          # run unit tests
+npm test          # unit tests
 npm run build     # compile TypeScript
 ```
 
-**Test the hook manually:**
+Test the hook:
 ```bash
-npm run build
 echo '{"prompt":"find the function that handles auth"}' \
   | SCALEDOWN_API_KEY=your-key node dist/hooks/user-prompt-submit.js
 ```
 
-**Test the MCP server starts:**
+Test the MCP server starts:
 ```bash
 SCALEDOWN_API_KEY=test echo '{}' | node dist/src/index.js
 ```

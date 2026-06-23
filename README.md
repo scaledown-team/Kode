@@ -1,4 +1,4 @@
-# Kode by Scaledown
+# DietCode by Scaledown
 
 **The context optimization layer for AI coding agents.**
 

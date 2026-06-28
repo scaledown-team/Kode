@@ -11,6 +11,7 @@ import { registerCompressTool } from "./tools/compress.js";
 import { registerSummarizeTool } from "./tools/summarize.js";
 import { registerClassifyTool } from "./tools/classify.js";
 import { registerExtractTool } from "./tools/extract.js";
+import { registerRetrieveTool } from "./tools/retrieve.js";
 
 jest.mock("./stats.js", () => ({
   addSaving: jest.fn(),
@@ -34,12 +35,22 @@ async function getToolSchemas() {
     compactThreshold: 50,
     showProgress: false,
     maxContextTokens: 200000,
+    proxy: {
+      port: 8788,
+      upstream: "https://api.anthropic.com",
+      recentTurns: 4,
+      blockThreshold: 2000,
+      compactThreshold: 90000,
+      disable: false,
+      blockCompress: false,
+    },
   };
 
   registerCompressTool(server, sdClient, config);
   registerSummarizeTool(server, sdClient);
   registerClassifyTool(server, sdClient);
   registerExtractTool(server, sdClient);
+  registerRetrieveTool(server);
 
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const mcpClient = new Client({ name: "test-client", version: "0.0.0" });
@@ -137,9 +148,20 @@ describe("sd_extract schema", () => {
   });
 });
 
+describe("sd_retrieve schema", () => {
+  it("has id as required string", () => {
+    const schema = tools["sd_retrieve"].inputSchema as {
+      properties: Record<string, { type: string }>;
+      required?: string[];
+    };
+    expect(schema.properties["id"].type).toBe("string");
+    expect(schema.required).toContain("id");
+  });
+});
+
 describe("tool descriptions", () => {
-  it("all 4 tools have descriptions mentioning Scaledown", () => {
-    for (const toolName of ["sd_compress", "sd_summarize", "sd_classify", "sd_extract"]) {
+  it("all tools have descriptions mentioning Scaledown", () => {
+    for (const toolName of ["sd_compress", "sd_summarize", "sd_classify", "sd_extract", "sd_retrieve"]) {
       const tool = tools[toolName];
       expect(tool.description).toMatch(/scaledown/i);
     }

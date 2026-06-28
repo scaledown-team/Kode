@@ -9,10 +9,15 @@ Every time you submit a prompt, the plugin (via hooks in Claude Code and Codex C
 1. **Classifies your intent** and prepends a one-line hint (e.g. `[DietCode intent: file_read (87%)]`) so the agent picks the right tool without guessing
 2. **Compresses large contexts** automatically when you paste in a big codebase and ask a retrieval-style question — reducing token usage by 50–70% before the prompt reaches the model
 3. **Compresses large tool outputs** (`PostToolUse`) — `ls`, `grep`, `git diff/log/status` are structurally compacted with zero latency, and anything still large is run through Scaledown before it enters context
-4. **Summarizes on compaction** (`PreCompact`) — when the context window fills, the conversation is summarized by **Scaledown's summarize model** instead of Claude's default summarizer
-5. **Tracks token savings** — every compression/summarization is counted, shown live in the Claude Code status line (`↓ 125.4K saved · 747 reqs`)
+4. **Tracks token savings** — every compression/summarization is counted, shown live in the Claude Code status line (`↓ 125.4K saved · 747 reqs`)
 
-On top of that, your agent gains four tools it can call on demand in **all three clients**:
+And — the big one for **real, per-turn token savings** — an optional **proxy mode**:
+
+5. **Progressive compaction via proxy** (`dietcode claude`) — runs Claude Code through a local proxy that rewrites the **outgoing** request on every turn, keeping a running **Scaledown summary** of older turns so the context genuinely *shrinks* instead of growing. This is the only mode that actually reduces tokens (hooks can only *add* context), and it replaces Claude's own lossy auto-compaction. See [Proxy mode](#proxy-mode-real-token-savings).
+
+> **Why not a `PreCompact` hook?** Claude Code's `PreCompact` hook can't replace the compaction summary or remove anything from the window — it can only append (see [anthropics/claude-code#24965](https://github.com/anthropics/claude-code/issues/24965)). Injecting a summary there *costs* tokens rather than saving them, so the real work happens in the proxy, where DietCode controls the request payload.
+
+On top of that, your agent gains tools it can call on demand in **all three clients**:
 
 | Tool | What it does |
 |---|---|
@@ -20,6 +25,7 @@ On top of that, your agent gains four tools it can call on demand in **all three
 | `sd_summarize` | Abstractively summarize text to compact long conversations |
 | `sd_classify` | Classify text against custom labels (bug vs. feature vs. question) |
 | `sd_extract` | Extract named entities or structured data from any text |
+| `sd_retrieve` | Pull back the original text behind a proxy summary marker (reversibility) |
 
 > **Status line / savings display is Claude Code only.** Cursor and Codex CLI have no status-line API, so token savings still happen there but aren't displayed. This is an npm CLI plugin — there is no VS Code/IDE extension; the "status line" refers to Claude Code's terminal status line.
 
@@ -38,6 +44,66 @@ your prompt ──▶ [intent classify] ──▶ [needle-in-haystack?] ──�
   *retrieval-intent*. Conversational prompts and code you're asking it to write
   are left untouched.
 - **On-demand tools** give you manual control in any client.
+
+---
+
+## Proxy mode (real token savings)
+
+Hooks can only *add* context to the window — they can never rewrite the
+conversation history Claude re-sends every turn. So the only way to genuinely
+**reduce** tokens (and to actually replace Claude's compaction) is to sit in the
+request path. That's what proxy mode does.
+
+```bash
+dietcode claude        # = claude, but routed through DietCode's local proxy
+```
+
+This starts a tiny local proxy on `127.0.0.1` (ephemeral port, torn down when
+you quit), points Claude Code at it via `ANTHROPIC_BASE_URL`, and launches
+`claude` normally. On every request the proxy rewrites the outgoing payload:
+
+```
+[ system + tools ]                 ← untouched (keeps Anthropic's prompt cache warm)
+[ running Scaledown summary ]      ← stands in for older turns; extended only at compaction steps
+[ last N turns verbatim ]          ← the live working set
+```
+
+- **Progressive, not per-call.** Most turns make **zero** Scaledown calls — the
+  proxy just reuses the cached running summary. Only when (summary + recent turns)
+  crosses `SCALEDOWN_PROXY_COMPACT_THRESHOLD` does it make **one** call to fold
+  the oldest turns into the summary. Cadence ≈ how often Claude would compact.
+- **Replaces native compaction.** Because the forwarded payload stays small, the
+  usage Claude Code sees stays low, so its own auto-compaction effectively never
+  fires — Scaledown owns compaction instead.
+- **Reversible.** Compacted turns are stashed locally; a summary marker tells
+  Claude to call `sd_retrieve("<id>")` if it later needs an exact detail.
+- **Cache-safe.** The summary block is byte-stable between compaction steps, so
+  the cached prefix keeps hitting; it only changes at a compaction step (when
+  native compaction would have busted the cache anyway).
+- **Fail-open.** Any transform/Scaledown error forwards the original request
+  unchanged — the proxy never breaks or drops a request. With no API key it runs
+  as a pure passthrough.
+
+> **Claude Code only.** The proxy speaks the Anthropic Messages format. Codex CLI
+> and Cursor are unaffected and keep using the hooks/rules described below.
+
+**Make it the default.** `dietcode setup` offers (recommended) to alias `claude` →
+`dietcode claude` in your shell config, so you don't have to remember the wrapper.
+The alias is shell-only and the wrapper launches the real binary directly, so
+there's no recursion; run the unwrapped CLI anytime with `command claude`.
+
+**Knowing whether it's on.** The Claude Code status line tells you live: in a
+proxy session it just shows your savings; in a plain `claude` session it appends
+`DietCode compaction off` as a reminder. (The agent name stays `DietCode` either
+way — it's static config and can't change per session.)
+
+Prefer to manage it yourself? Run the proxy in the foreground and set the env var:
+
+```bash
+dietcode proxy --port 8788
+export ANTHROPIC_BASE_URL=http://127.0.0.1:8788
+claude
+```
 
 ---
 
@@ -64,7 +130,8 @@ The setup wizard will:
 3. Save it to your shell config (`~/.zshrc`, `~/.bashrc`, etc.) and to `~/.scaledown/config.json`
 4. Register the MCP server with Claude Code (`claude mcp add --scope user`)
 5. Write the `UserPromptSubmit`, `PostToolUse`, and `PreCompact` hooks, the **status line**, and the auto-compact threshold to `~/.claude/settings.json`
-6. Optionally configure Codex CLI and/or Cursor if you answer **y** when prompted
+6. Offer (recommended) to alias `claude` → `dietcode claude` so [proxy mode](#proxy-mode-real-token-savings) is on by default
+7. Optionally configure Codex CLI and/or Cursor if you answer **y** when prompted
 
 Restart Claude Code and you're done.
 
@@ -238,7 +305,7 @@ cp node_modules/dietcode/agents-md/AGENTS.md ./AGENTS.md
 | Auto intent hints on every prompt | ✅ hook | ✅ via rules¹ | ✅ hook |
 | Auto compression (large prompts) | ✅ hook | ✅ via rules¹ | ✅ hook |
 | Auto tool output compression | ✅ hook | ✅ via rules¹ | ✅ hook (Bash only)² |
-| Auto summarization on compaction (Scaledown summarize model) | ✅ hook | ❌ | ✅ hook |
+| Progressive compaction w/ real token savings (Scaledown summarize model) | ✅ proxy⁴ | ❌ | ❌ |
 | Token-savings status line | ✅ | ❌³ | ❌³ |
 | Context progress bar | ✅ | ❌³ | ❌³ |
 | Auto config re-sync on update | ✅ | ✅ | ✅ |
@@ -246,6 +313,7 @@ cp node_modules/dietcode/agents-md/AGENTS.md ./AGENTS.md
 ¹ Cursor rules instruct the agent to call DietCode tools proactively — not a true hook, but effective in Agent mode.
 ² Codex CLI's `PostToolUse` fires only for Bash tool events, not file reads or MCP calls.
 ³ Cursor and Codex CLI expose no status-line API. Savings still accrue (tracked in `~/.scaledown/stats.json`) but there is no place to display them.
+⁴ Proxy mode is opt-in via `dietcode claude` and is Claude Code only (it speaks the Anthropic Messages API). See [Proxy mode](#proxy-mode-real-token-savings).
 
 ---
 
@@ -301,6 +369,11 @@ Set these environment variables to tune behavior:
 | `SCALEDOWN_COMPACT_THRESHOLD` | `50` | Context-usage % that triggers compaction (also sets `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`) |
 | `SCALEDOWN_SHOW_PROGRESS` | `true` | Set to `false` to hide the per-prompt context progress bar |
 | `SCALEDOWN_MAX_CONTEXT_TOKENS` | `200000` | Context-window size used for the progress bar / compaction math |
+| `SCALEDOWN_PROXY_COMPACT_THRESHOLD` | `50000` | Tokens (summary + recent turns) that trigger a proxy compaction step. Keep below the native auto-compact trigger so the proxy compacts first |
+| `SCALEDOWN_PROXY_RECENT_TURNS` | `4` | Number of most-recent turns the proxy keeps verbatim |
+| `SCALEDOWN_PROXY_PORT` | `8788` | Port for the foreground `dietcode proxy` (the `dietcode claude` wrapper uses an ephemeral port) |
+| `SCALEDOWN_PROXY_UPSTREAM` | `https://api.anthropic.com` | Upstream the proxy forwards to |
+| `SCALEDOWN_PROXY_DISABLE` | `false` | Set to `true` to make the proxy a pure passthrough (no compaction) |
 
 ```bash
 export SCALEDOWN_COMPRESS_THRESHOLD=5000
@@ -340,7 +413,7 @@ Remove all DietCode integration from every configured harness with one command:
 dietcode uninstall
 ```
 
-This strips the hooks, status line, and auto-compact env var from `~/.claude/settings.json`, removes the managed block from `~/.codex/config.toml`, deletes `~/.cursor/rules/dietcode.mdc`, and unregisters the MCP server from Claude Code — all while preserving any of your own config in those files.
+This strips the hooks, status line, and auto-compact env var from `~/.claude/settings.json`, removes the managed block from `~/.codex/config.toml`, deletes `~/.cursor/rules/dietcode.mdc`, removes the `claude` → `dietcode claude` shell alias, and unregisters the MCP server from Claude Code — all while preserving any of your own config in those files.
 
 Then remove the package and (optionally) your data:
 

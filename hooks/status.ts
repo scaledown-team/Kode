@@ -32,6 +32,15 @@ function readStats(): StatsFile {
   }
 }
 
+// True when this Claude Code session is running through DietCode's proxy. The
+// `dietcode claude` wrapper sets DIETCODE_PROXY=1 on the child (which the status
+// line inherits); we also accept a loopback ANTHROPIC_BASE_URL for the manual
+// `dietcode proxy` + export workflow.
+function proxyActive(): boolean {
+  if (process.env.DIETCODE_PROXY === "1") return true;
+  return /127\.0\.0\.1|localhost/.test(process.env.ANTHROPIC_BASE_URL ?? "");
+}
+
 function readStdin(): Promise<string> {
   return new Promise((res) => {
     let data = "";
@@ -72,6 +81,9 @@ async function main(): Promise<void> {
 
   parts.push(`↓ ${formatTokenCount(totalSaved)} saved`);
   if (totalRequests > 0) parts.push(`${totalRequests} reqs`);
+
+  // Off-proxy nudge: compaction (real token savings) only runs via the proxy.
+  if (!proxyActive()) parts.push("DietCode compaction off");
 
   try {
     const update = await checkForUpdate();

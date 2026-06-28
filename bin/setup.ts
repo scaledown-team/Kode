@@ -66,6 +66,27 @@ function detectRcFile(): string {
   return `${homedir()}/.profile`;
 }
 
+// Opt-in shell alias so plain `claude` routes through DietCode's proxy. spawn()
+// in the wrapper resolves the real binary (no shell), so there's no recursion;
+// `command claude` still bypasses the alias.
+const ALIAS_MARKER = "# DietCode: route claude through the compaction proxy";
+
+function setClaudeAlias(enable: boolean): void {
+  const rcFile = detectRcFile();
+  const isFish = rcFile.includes("fish");
+  const aliasLine = isFish ? "alias claude 'dietcode claude'" : "alias claude='dietcode claude'";
+  const existing = existsSync(rcFile) ? readFileSync(rcFile, "utf8") : "";
+  // Strip any prior DietCode alias block (idempotent add/remove).
+  let updated = existing.replace(
+    new RegExp(`\\n*${ALIAS_MARKER}\\nalias claude[^\\n]*\\n`, "g"),
+    "\n"
+  );
+  if (enable) {
+    updated = updated.replace(/\n*$/, "\n") + `\n${ALIAS_MARKER}\n${aliasLine}\n`;
+  }
+  writeFileSync(rcFile, updated, "utf8");
+}
+
 function storeApiKey(apiKey: string): void {
   const rcFile = detectRcFile();
   const compactThreshold = process.env.SCALEDOWN_COMPACT_THRESHOLD ?? "50";
@@ -119,21 +140,26 @@ function registerMcp(): void {
 
 function writeAgent(): void {
   const agentsDir = resolve(homedir(), ".claude", "agents");
-  // Remove the pre-rename agent file so we don't leave a stale duplicate.
-  const oldAgentPath = resolve(agentsDir, "scaledown.md");
-  const agentPath = resolve(agentsDir, "dietcode.md");
+  // Remove pre-rename / lowercase agent files so we don't leave stale duplicates.
+  const staleAgentPaths = [
+    resolve(agentsDir, "scaledown.md"),
+    resolve(agentsDir, "dietcode.md"),
+  ];
+  const agentPath = resolve(agentsDir, "DietCode.md");
 
   if (!existsSync(agentsDir)) {
     mkdirSync(agentsDir, { recursive: true });
   }
-  if (existsSync(oldAgentPath)) {
-    try { execSync(`rm -f "${oldAgentPath}"`); } catch { /* non-fatal */ }
+  for (const p of staleAgentPaths) {
+    if (existsSync(p)) {
+      try { execSync(`rm -f "${p}"`); } catch { /* non-fatal */ }
+    }
   }
 
   writeFileSync(
     agentPath,
     `---
-name: dietcode
+name: DietCode
 description: DietCode-enhanced agent — context compression and intent routing active
 model: inherit
 ---
@@ -177,6 +203,9 @@ function writeHooks(): void {
     command: statusCommand,
     refreshInterval: 5000,
   };
+
+  // Set the active agent so Claude Code shows "DietCode" as the agent name.
+  settings.agent = "DietCode";
 
   // Set Claude Code's auto-compact threshold to match SCALEDOWN_COMPACT_THRESHOLD
   const compactThreshold = process.env.SCALEDOWN_COMPACT_THRESHOLD ?? "50";
@@ -296,6 +325,25 @@ async function main(): Promise<void> {
   writeAgent();
   writeHooks();
 
+  // Step 6b: Proxy mode — the only mode that actually reduces tokens.
+  console.log(
+    "\nProxy mode runs Claude Code through DietCode's local proxy so context is\n" +
+      "progressively compacted by Scaledown — real token savings, not just hooks."
+  );
+  const useAlias = await prompt(
+    "Make `claude` use the proxy by default (recommended)? [Y/n]: "
+  );
+  if (useAlias.trim().toLowerCase() !== "n") {
+    setClaudeAlias(true);
+    console.log(
+      "  ✓ Aliased `claude` → `dietcode claude` in your shell config\n" +
+        "    (run the real binary anytime with `command claude`)"
+    );
+  } else {
+    setClaudeAlias(false);
+    console.log("  Skipped — start sessions with `dietcode claude` to enable compaction.");
+  }
+
   // Step 7: Optional Codex CLI hooks
   const useCodex = await prompt("\nDo you also use OpenAI Codex CLI? (y/N): ");
   if (useCodex.toLowerCase() === "y") {
@@ -325,27 +373,45 @@ async function main(): Promise<void> {
     source ${rcFile2}
   (New terminal windows will pick it up automatically.)
 
-Active features:
+⭐ Recommended — real token savings via the proxy:
+
+    dietcode claude
+
+  This launches Claude Code through DietCode's local proxy, which rewrites the
+  OUTGOING request on every turn: it keeps a running ScaleDown summary of older
+  turns (progressive compaction) so context genuinely shrinks instead of growing.
+  Unlike a hook, the proxy can replace stale turns, so this is the only mode that
+  actually reduces tokens — and it keeps Claude's own (lossy) auto-compaction from
+  firing. If Claude later needs an exact detail, it calls the sd_retrieve tool.
+
+Active features (hooks, always on):
   • "dietcode" badge shown in the Claude Code text input
   • Co-Authored-By: DietCode trailer added to every git commit
   • Intent hint prepended to every prompt (helps Claude pick the right tool)
   • Context progress bar shown on every prompt (e.g. [████░░░░░░] 42%)
   • Auto-compression for large NIAH-style queries (threshold: ${process.env.SCALEDOWN_COMPRESS_THRESHOLD ?? "10000"} tokens, rate: ${process.env.SCALEDOWN_COMPRESS_RATE ?? "0.3"})
   • Post-tool output compression — large tool results are compressed before entering context (threshold: ${process.env.SCALEDOWN_POST_TOOL_THRESHOLD ?? "4000"} tokens)
-  • Context compaction via Scaledown's summarize model at ${process.env.SCALEDOWN_COMPACT_THRESHOLD ?? "50"}% usage (replaces Claude's default summarization)
   • Token savings counter shown below the Claude Code text input (updates every 5s)
+
+Proxy features (when you run \`dietcode claude\`):
+  • Progressive ScaleDown compaction of the outgoing request — real token savings
+  • Replaces Claude's native auto-compaction; reversible via the sd_retrieve tool
 
 Environment variables:
   SCALEDOWN_COMPACT_THRESHOLD=N      — context % that triggers compaction (default: 50)
   SCALEDOWN_SHOW_PROGRESS=false      — disable the per-turn context progress bar
   SCALEDOWN_POST_TOOL_DISABLE=true   — disable post-tool compression
   SCALEDOWN_POST_TOOL_THRESHOLD=N    — token threshold for tool output compression (default: 4000)
+  SCALEDOWN_PROXY_COMPACT_THRESHOLD=N — tokens that trigger a proxy compaction step (default: 50000)
+  SCALEDOWN_PROXY_RECENT_TURNS=N     — recent turns kept verbatim by the proxy (default: 4)
+  SCALEDOWN_PROXY_DISABLE=true       — make the proxy a pure passthrough (no compaction)
 
 On-demand MCP tools Claude can call:
   • sd_compress   — compress a large context block
   • sd_summarize  — abstractively summarize text
   • sd_classify   — classify text with custom labels
   • sd_extract    — extract named entities / structured data
+  • sd_retrieve   — pull back the original text behind a proxy summary marker
 
 Restart Claude Code for changes to take effect.
 Docs: https://docs.scaledown.ai
@@ -361,6 +427,14 @@ async function uninstall(): Promise<void> {
   if (result.claude) console.log("  ✓ Removed hooks + status line from ~/.claude/settings.json");
   if (result.codex) console.log("  ✓ Removed hooks from ~/.codex/config.toml");
   if (result.cursor) console.log("  ✓ Removed Cursor rules from ~/.cursor/rules/");
+
+  // Remove the `claude` → `dietcode claude` alias if we added it.
+  try {
+    setClaudeAlias(false);
+    console.log("  ✓ Removed the `claude` proxy alias from your shell config");
+  } catch {
+    // non-fatal
+  }
 
   // Unregister the MCP server (current + pre-rename id) from Claude Code.
   let mcpRemoved = false;
@@ -392,9 +466,21 @@ Restart your coding tool for changes to take effect.
 }
 
 const command = process.argv[2];
-const run = command === "uninstall" ? uninstall : main;
 
-run().catch((err) => {
-  console.error(`${command === "uninstall" ? "Uninstall" : "Setup"} failed:`, err);
+async function dispatch(): Promise<void> {
+  if (command === "uninstall") return uninstall();
+  if (command === "proxy" || command === "claude") {
+    const { runProxy, runClaudeWrapper } = await import("./proxy.js");
+    return command === "claude"
+      ? runClaudeWrapper(process.argv.slice(3))
+      : runProxy(process.argv.slice(3));
+  }
+  return main();
+}
+
+dispatch().catch((err) => {
+  const label =
+    command === "uninstall" ? "Uninstall" : command === "claude" || command === "proxy" ? "Proxy" : "Setup";
+  console.error(`${label} failed:`, err);
   process.exit(1);
 });

@@ -14,6 +14,47 @@ export interface Config {
   compactThreshold: number;
   showProgress: boolean;
   maxContextTokens: number;
+  proxy: ProxyConfig;
+}
+
+export interface ProxyConfig {
+  /** Port the local proxy listens on (foreground `dietcode proxy`). */
+  port: number;
+  /** Upstream Anthropic API base URL the proxy forwards to. */
+  upstream: string;
+  /** Number of most-recent turns left verbatim (never compacted). */
+  recentTurns: number;
+  /** Min tokens for the optional per-block tool-output compressor. */
+  blockThreshold: number;
+  /** Total estimated tokens (summary + tail) that triggers a compaction step. */
+  compactThreshold: number;
+  /** Disable proxy transforms entirely (pure passthrough). */
+  disable: boolean;
+  /** Enable the optional per-block tool_result compressor (off by default). */
+  blockCompress: boolean;
+}
+
+export function loadProxyConfig(): ProxyConfig {
+  const intEnv = (name: string, fallback: number): number => {
+    const raw = process.env[name];
+    if (!raw) return fallback;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+  };
+
+  return {
+    port: intEnv("SCALEDOWN_PROXY_PORT", 8788),
+    upstream:
+      process.env.SCALEDOWN_PROXY_UPSTREAM ?? "https://api.anthropic.com",
+    recentTurns: intEnv("SCALEDOWN_PROXY_RECENT_TURNS", 4),
+    blockThreshold: intEnv("SCALEDOWN_PROXY_BLOCK_THRESHOLD", 2000),
+    // Must stay below Claude's native auto-compact trigger so OUR compaction
+    // fires first. The plugin sets CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=50 (~100k of
+    // a 200k window), so default well under that at 50k.
+    compactThreshold: intEnv("SCALEDOWN_PROXY_COMPACT_THRESHOLD", 50000),
+    disable: process.env.SCALEDOWN_PROXY_DISABLE === "true",
+    blockCompress: process.env.SCALEDOWN_PROXY_BLOCK_COMPRESS === "true",
+  };
 }
 
 function readConfigFile(): { apiKey?: string } {
@@ -74,5 +115,6 @@ export function loadConfig(): Config {
     compactThreshold,
     showProgress,
     maxContextTokens,
+    proxy: loadProxyConfig(),
   };
 }

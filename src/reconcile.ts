@@ -92,6 +92,11 @@ function reconcileClaude(): boolean {
     refreshInterval: 5000,
   };
 
+  // Active agent name shown by Claude Code. Migrate the pre-rename value.
+  if (settings.agent === "scaledown" || settings.agent === "dietcode" || !settings.agent) {
+    settings.agent = "DietCode";
+  }
+
   const env = (settings.env as Record<string, string>) ?? {};
   if (!env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE) {
     env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE =
@@ -267,6 +272,11 @@ function uninstallClaude(): boolean {
   const statusLine = settings.statusLine as { command?: string } | undefined;
   if (statusLine && typeof statusLine.command === "string" && isOurHookEntry(statusLine)) {
     delete settings.statusLine;
+    changed = true;
+  }
+
+  if (settings.agent === "DietCode" || settings.agent === "dietcode" || settings.agent === "scaledown") {
+    delete settings.agent;
     changed = true;
   }
 

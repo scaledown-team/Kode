@@ -96,6 +96,15 @@ async function buildConnectedPair() {
     compactThreshold: 50,
     showProgress: false,
     maxContextTokens: 200000,
+    proxy: {
+      port: 8788,
+      upstream: "https://api.anthropic.com",
+      recentTurns: 4,
+      blockThreshold: 2000,
+      compactThreshold: 90000,
+      disable: false,
+      blockCompress: false,
+    },
   };
 
   registerCompressTool(server, client, config);

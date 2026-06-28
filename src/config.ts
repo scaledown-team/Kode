@@ -33,7 +33,7 @@ export function loadConfig(): Config {
     throw new Error(
       "SCALEDOWN_API_KEY is not set.\n" +
         "Get your API key at https://scaledown.ai/dashboard, then run:\n" +
-        "  scaledown-claude setup\n" +
+        "  dietcode setup\n" +
         "or set the environment variable manually."
     );
   }

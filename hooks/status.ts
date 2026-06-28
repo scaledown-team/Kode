@@ -83,7 +83,7 @@ async function main(): Promise<void> {
         parts.push(`restart to activate v${update.latest}`);
       }
     } else if (update && update.kind === "major") {
-      parts.push(`v${update.latest} available: npm i -g @scaledown/claude-plugin@latest`);
+      parts.push(`v${update.latest} available: npm i -g dietcode@latest`);
     }
   } catch {
     // non-fatal — never crash status line

@@ -1,16 +1,16 @@
 ---
-description: Scaledown context optimization — proactive MCP tool use
+description: DietCode context optimization — proactive MCP tool use
 globs:
 alwaysApply: true
 ---
 
-# Scaledown Context Optimization
+# DietCode Context Optimization
 
-Scaledown MCP tools are available. Use them proactively to keep context lean:
+DietCode MCP tools are available. Use them proactively to keep context lean:
 
 - **sd_compress**: Call before searching or reading files likely to be large (>2000 lines). Pass the file content or prompt as `text`. This cuts token usage by 50–70% for retrieval tasks.
 - **sd_summarize**: Call after fetching web pages, reading long docs, or when conversation history is growing large. Returns an abstractive summary.
 - **sd_classify**: Call at the start of a complex or ambiguous task to determine intent (file_read, file_write, shell_exec, search, explain, etc.) and route to the right tool chain.
 - **sd_extract**: Call to pull structured data (function names, file paths, error codes, etc.) from large unstructured text.
 
-Do not wait to be asked — if context is at risk of growing unwieldy, invoke the appropriate Scaledown tool first.
+Do not wait to be asked — if context is at risk of growing unwieldy, invoke the appropriate DietCode tool first.

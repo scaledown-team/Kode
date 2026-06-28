@@ -1,9 +1,9 @@
 // Keeps each harness's on-disk config in sync with the installed package.
 //
-// The problem this solves: `npm install -g @scaledown/claude-plugin@latest`
+// The problem this solves: `npm install -g dietcode@latest`
 // only replaces files under dist/. It never touches the user's harness configs
-// (~/.claude/settings.json, ~/.codex/config.toml, ~/.cursor/rules/scaledown.mdc),
-// which were written once by `scaledown-claude setup`. So new managed keys
+// (~/.claude/settings.json, ~/.codex/config.toml, ~/.cursor/rules/dietcode.mdc),
+// which were written once by `dietcode setup`. So new managed keys
 // (e.g. statusLine) never reach existing users, and absolute hook paths baked in
 // at setup time break when the Node version (and thus the global install path)
 // changes.
@@ -48,12 +48,17 @@ export interface ReconcileResult {
 const claudeSettingsPath = () => resolve(homedir(), ".claude", "settings.json");
 
 // A user is "configured for Claude Code" if settings.json already contains our
-// hooks (i.e. they ran setup at some point).
+// hooks (i.e. they ran setup at some point). Matches both DietCode installs and
+// pre-rename Scaledown installs so existing users get migrated on update.
 function claudeIsConfigured(settings: Record<string, unknown>): boolean {
   const hooks = settings.hooks as Record<string, unknown> | undefined;
   if (!hooks) return false;
   const json = JSON.stringify(hooks);
-  return json.includes("user-prompt-submit.js") || json.includes("scaledown");
+  return (
+    json.includes("user-prompt-submit.js") ||
+    json.includes("dietcode") ||
+    json.includes("scaledown")
+  );
 }
 
 function reconcileClaude(): boolean {
@@ -94,7 +99,8 @@ function reconcileClaude(): boolean {
   }
   settings.env = env;
 
-  settings._scaledownVersion = PKG_VERSION;
+  delete settings._scaledownVersion; // migrate pre-rename stamp
+  settings._dietcodeVersion = PKG_VERSION;
 
   writeFileSync(path, JSON.stringify(settings, null, 2) + "\n", "utf8");
   return true;
@@ -110,15 +116,21 @@ function tomlStringValue(s: string): string {
   return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
+// Matches both the new DietCode marker and the pre-rename Scaledown marker so
+// existing Codex users are migrated on update rather than gaining a second block.
+const CODEX_MARKER_RE = /# (?:DietCode|Scaledown) hooks/;
+const CODEX_BLOCK_RE =
+  /# (?:DietCode|Scaledown) hooks[\s\S]*?(?=\n\[(?!\[|hooks\b)|$)/;
+
 function buildCodexHooksToml(): string {
   return [
-    `# Scaledown hooks — managed by scaledown-claude (v${PKG_VERSION})`,
+    `# DietCode hooks — managed by dietcode (v${PKG_VERSION})`,
     `[[hooks.UserPromptSubmit]]`,
     `[[hooks.UserPromptSubmit.hooks]]`,
     `type = "command"`,
     `command = ${tomlStringValue(HOOK("user-prompt-submit.js"))}`,
     `timeout = 30`,
-    `statusMessage = "Scaledown: classifying intent..."`,
+    `statusMessage = "DietCode: classifying intent..."`,
     ``,
     `[[hooks.PostToolUse]]`,
     `[[hooks.PostToolUse.hooks]]`,
@@ -139,50 +151,50 @@ function reconcileCodex(): boolean {
   const path = codexConfigPath();
   if (!existsSync(path)) return false;
   const existing = readFileSync(path, "utf8");
-  if (!existing.includes("# Scaledown hooks")) return false; // not set up
+  if (!CODEX_MARKER_RE.test(existing)) return false; // not set up
 
   // Replace the whole managed block: from the marker up to the next top-level
   // section that is NOT one of our hook tables ([hooks…] / [[hooks…]]), or EOF.
   // The negative lookahead must permit a second `[` so `[[hooks.X]]` sub-tables
   // stay inside the match instead of prematurely ending it.
-  const updated = existing.replace(
-    /# Scaledown hooks[\s\S]*?(?=\n\[(?!\[|hooks\b)|$)/,
-    buildCodexHooksToml()
-  );
+  const updated = existing.replace(CODEX_BLOCK_RE, buildCodexHooksToml());
   writeFileSync(path, updated, "utf8");
   return true;
 }
 
 // ---------------------------------------------------------------------------
-// Cursor — ~/.cursor/rules/scaledown.mdc
+// Cursor — ~/.cursor/rules/dietcode.mdc
 // ---------------------------------------------------------------------------
 
 export const CURSOR_RULES_CONTENT = `---
-description: Scaledown context optimization — proactive MCP tool use
+description: DietCode context optimization — proactive MCP tool use
 globs:
 alwaysApply: true
 ---
 
-# Scaledown Context Optimization
+# DietCode Context Optimization
 
-Scaledown MCP tools are available. Use them proactively to keep context lean:
+DietCode MCP tools are available. Use them proactively to keep context lean:
 
 - **sd_compress**: Call before searching or reading files likely to be large (>2000 lines). Pass the file content or prompt as \`text\`. This cuts token usage by 50–70% for retrieval tasks.
 - **sd_summarize**: Call after fetching web pages, reading long docs, or when conversation history is growing large. Returns an abstractive summary.
 - **sd_classify**: Call at the start of a complex or ambiguous task to determine intent (file_read, file_write, shell_exec, search, explain, etc.) and route to the right tool chain.
 - **sd_extract**: Call to pull structured data (function names, file paths, error codes, etc.) from large unstructured text.
 
-Do not wait to be asked — if context is at risk of growing unwieldy, invoke the appropriate Scaledown tool first.
+Do not wait to be asked — if context is at risk of growing unwieldy, invoke the appropriate DietCode tool first.
 `;
 
-const cursorRulesGlobalPath = () =>
-  resolve(homedir(), ".cursor", "rules", "scaledown.mdc");
+const cursorRulesDir = () => resolve(homedir(), ".cursor", "rules");
+const cursorRulesGlobalPath = () => resolve(cursorRulesDir(), "dietcode.mdc");
+const cursorRulesLegacyPath = () => resolve(cursorRulesDir(), "scaledown.mdc");
 
 function reconcileCursor(): boolean {
   // Only refresh the global rules file if it already exists. Project-scoped
   // rules live in arbitrary repos we can't enumerate, so we leave those alone.
   const path = cursorRulesGlobalPath();
-  if (!existsSync(path)) return false;
+  const legacy = cursorRulesLegacyPath();
+  if (!existsSync(path) && !existsSync(legacy)) return false;
+  if (existsSync(legacy)) rmSync(legacy, { force: true }); // migrate filename
   writeFileSync(path, CURSOR_RULES_CONTENT, "utf8");
   return true;
 }
@@ -211,10 +223,21 @@ function safe(fn: () => boolean): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Uninstall — strips all Scaledown-managed config from each harness, leaving
+// Uninstall — strips all DietCode-managed config from each harness, leaving
 // user content intact. Counterpart to reconcileAll(). Does NOT remove the npm
 // package itself or the ~/.scaledown data dir (API key, stats).
 // ---------------------------------------------------------------------------
+
+// Identifies a hook entry we own — matches DietCode and pre-rename Scaledown
+// installs by package name or by our hook filenames.
+function isOurHookEntry(entry: unknown): boolean {
+  const json = JSON.stringify(entry);
+  return (
+    json.includes("dietcode") ||
+    json.includes("scaledown") ||
+    /user-prompt-submit\.js|post-tool-use\.js|pre-compact\.js|status\.js/.test(json)
+  );
+}
 
 function uninstallClaude(): boolean {
   const path = claudeSettingsPath();
@@ -233,9 +256,7 @@ function uninstallClaude(): boolean {
     for (const event of ["UserPromptSubmit", "PostToolUse", "PreCompact"]) {
       const arr = hooks[event];
       if (!Array.isArray(arr)) continue;
-      const kept = arr.filter(
-        (entry) => !JSON.stringify(entry).includes("scaledown")
-      );
+      const kept = arr.filter((entry) => !isOurHookEntry(entry));
       if (kept.length !== arr.length) changed = true;
       if (kept.length > 0) hooks[event] = kept;
       else delete hooks[event];
@@ -244,7 +265,7 @@ function uninstallClaude(): boolean {
   }
 
   const statusLine = settings.statusLine as { command?: string } | undefined;
-  if (statusLine && typeof statusLine.command === "string" && statusLine.command.includes("scaledown")) {
+  if (statusLine && typeof statusLine.command === "string" && isOurHookEntry(statusLine)) {
     delete settings.statusLine;
     changed = true;
   }
@@ -256,9 +277,11 @@ function uninstallClaude(): boolean {
     changed = true;
   }
 
-  if ("_scaledownVersion" in settings) {
-    delete settings._scaledownVersion;
-    changed = true;
+  for (const stamp of ["_scaledownVersion", "_dietcodeVersion"]) {
+    if (stamp in settings) {
+      delete settings[stamp];
+      changed = true;
+    }
   }
 
   if (!changed) return false;
@@ -270,20 +293,24 @@ function uninstallCodex(): boolean {
   const path = codexConfigPath();
   if (!existsSync(path)) return false;
   const existing = readFileSync(path, "utf8");
-  if (!existing.includes("# Scaledown hooks")) return false;
-  // Remove the whole managed block (and a trailing blank line if present).
+  if (!CODEX_MARKER_RE.test(existing)) return false;
+  // Remove the whole managed block (and collapse leftover blank lines).
   const updated = existing
-    .replace(/\n*# Scaledown hooks[\s\S]*?(?=\n\[(?!\[|hooks\b)|$)/, "")
+    .replace(/\n*# (?:DietCode|Scaledown) hooks[\s\S]*?(?=\n\[(?!\[|hooks\b)|$)/, "")
     .replace(/\n{3,}/g, "\n\n");
   writeFileSync(path, updated, "utf8");
   return true;
 }
 
 function uninstallCursor(): boolean {
-  const path = cursorRulesGlobalPath();
-  if (!existsSync(path)) return false;
-  rmSync(path, { force: true });
-  return true;
+  let removed = false;
+  for (const p of [cursorRulesGlobalPath(), cursorRulesLegacyPath()]) {
+    if (existsSync(p)) {
+      rmSync(p, { force: true });
+      removed = true;
+    }
+  }
+  return removed;
 }
 
 export function uninstallAll(): ReconcileResult {

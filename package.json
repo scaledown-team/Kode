@@ -1,18 +1,18 @@
 {
-  "name": "@scaledown/claude-plugin",
-  "version": "0.3.1",
-  "description": "Claude Code plugin for Scaledown AI context optimization",
+  "name": "dietcode",
+  "version": "0.4.0",
+  "description": "DietCode — context optimization for Claude Code, Cursor, and Codex CLI, powered by Scaledown",
   "type": "module",
   "engines": {
     "node": ">=18"
   },
   "bin": {
-    "scaledown-claude": "./dist/bin/setup.js",
-    "scaledown-claude-hook": "./dist/hooks/user-prompt-submit.js",
-    "scaledown-claude-post-tool-use": "./dist/hooks/post-tool-use.js",
-    "scaledown-claude-git-attribution": "./dist/hooks/git-attribution.js",
-    "scaledown-claude-status": "./dist/hooks/status.js",
-    "scaledown-claude-reconcile": "./dist/bin/postinstall.js"
+    "dietcode": "./dist/bin/setup.js",
+    "dietcode-hook": "./dist/hooks/user-prompt-submit.js",
+    "dietcode-post-tool-use": "./dist/hooks/post-tool-use.js",
+    "dietcode-git-attribution": "./dist/hooks/git-attribution.js",
+    "dietcode-status": "./dist/hooks/status.js",
+    "dietcode-reconcile": "./dist/bin/postinstall.js"
   },
   "main": "./dist/src/index.js",
   "files": [

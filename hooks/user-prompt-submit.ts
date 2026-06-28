@@ -31,7 +31,7 @@ function logContextProgress(contextWindow: ContextWindow, compactThreshold: numb
   const bar = renderProgressBar(pct);
   const tokenStr = `${current_tokens.toLocaleString("en-US")} / ${max_tokens.toLocaleString("en-US")} tokens`;
   const suffix = pct >= compactThreshold ? " ⚡ compaction imminent" : "";
-  process.stderr.write(`scaledown: ${bar}  ${tokenStr}${suffix}\n`);
+  process.stderr.write(`dietcode: ${bar}  ${tokenStr}${suffix}\n`);
 }
 
 const INTENT_LABELS = [
@@ -119,15 +119,15 @@ async function main(): Promise<void> {
   try {
     const classification = await client.classify(prompt, INTENT_LABELS);
     const topScore = classification.scores[classification.top_label];
-    const hint = `[Scaledown intent: ${classification.top_label} (${Math.round(topScore * 100)}%)]`;
+    const hint = `[DietCode intent: ${classification.top_label} (${Math.round(topScore * 100)}%)]`;
     modifiedPrompt = `${hint}\n${modifiedPrompt}`;
     process.stderr.write(
-      `scaledown: intent=${classification.top_label} (${Math.round(topScore * 100)}%)\n`
+      `dietcode: intent=${classification.top_label} (${Math.round(topScore * 100)}%)\n`
     );
     addRequest();
   } catch (err) {
     process.stderr.write(
-      `scaledown: classify failed, skipping hint: ${String(err)}\n`
+      `dietcode: classify failed, skipping hint: ${String(err)}\n`
     );
   }
 
@@ -136,7 +136,7 @@ async function main(): Promise<void> {
     config.niahDisable || isNiahQuery(prompt, config.compressThreshold);
 
   if (!shouldCompress) {
-    process.stderr.write(`scaledown: compression skipped (prompt below threshold or not retrieval-style)\n`);
+    process.stderr.write(`dietcode: compression skipped (prompt below threshold or not retrieval-style)\n`);
   } else {
     try {
       const result = await client.compress(
@@ -148,20 +148,20 @@ async function main(): Promise<void> {
         result.original_prompt_tokens - result.compressed_prompt_tokens;
       const pct = Math.round((saved / result.original_prompt_tokens) * 100);
       process.stderr.write(
-        `scaledown: compressed prompt (${result.original_prompt_tokens} → ${result.compressed_prompt_tokens} tokens, -${pct}%)\n`
+        `dietcode: compressed prompt (${result.original_prompt_tokens} → ${result.compressed_prompt_tokens} tokens, -${pct}%)\n`
       );
       addSaving(sessionId, saved);
       addRequest();
 
       // Re-apply the intent hint on top of the compressed output
       const classifyHintMatch = modifiedPrompt.match(
-        /^\[Scaledown intent: .+?\]\n/
+        /^\[DietCode intent: .+?\]\n/
       );
       const hint = classifyHintMatch ? classifyHintMatch[0] : "";
       modifiedPrompt = `${hint}${result.compressed_prompt}`;
     } catch (err) {
       process.stderr.write(
-        `scaledown: compression failed, using original: ${String(err)}\n`
+        `dietcode: compression failed, using original: ${String(err)}\n`
       );
     }
   }
@@ -189,6 +189,6 @@ function readStdin(): Promise<string> {
 }
 
 main().catch((err) => {
-  process.stderr.write(`scaledown hook error: ${String(err)}\n`);
+  process.stderr.write(`dietcode hook error: ${String(err)}\n`);
   process.stdout.write("{}");
 });

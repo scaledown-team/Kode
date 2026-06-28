@@ -117,7 +117,7 @@ function needsCheck(cache: UpdateCache | null): boolean {
 
 export function triggerBackgroundUpdate(): void {
   try {
-    const child = spawn("npm", ["install", "-g", "@scaledown/claude-plugin@latest"], {
+    const child = spawn("npm", ["install", "-g", "dietcode@latest"], {
       detached: true,
       stdio: "ignore",
       shell: false,
@@ -159,7 +159,7 @@ export async function checkForUpdate(): Promise<UpdateResult | null> {
     const timeout = setTimeout(() => controller.abort(), 4000);
     let latestVersion: string;
     try {
-      const res = await fetch("https://registry.npmjs.org/@scaledown/claude-plugin/latest", {
+      const res = await fetch("https://registry.npmjs.org/dietcode/latest", {
         signal: controller.signal,
       });
       if (!res.ok) return null;

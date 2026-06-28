@@ -1,12 +1,12 @@
-# Scaledown Claude Code Plugin
+# DietCode
 
-Optimize your Claude Code sessions with [Scaledown](https://scaledown.ai) — automatic context compression, conversation summarization, intent-aware tool routing, and named entity extraction.
+Optimize your coding-agent sessions with **DietCode** — automatic context compression, conversation summarization, intent-aware tool routing, and named entity extraction, powered by [Scaledown](https://scaledown.ai).
 
 ## What it does
 
 Every time you submit a prompt, the plugin (via hooks in Claude Code and Codex CLI, or via rules guidance in Cursor):
 
-1. **Classifies your intent** and prepends a one-line hint (e.g. `[Scaledown intent: file_read (87%)]`) so the agent picks the right tool without guessing
+1. **Classifies your intent** and prepends a one-line hint (e.g. `[DietCode intent: file_read (87%)]`) so the agent picks the right tool without guessing
 2. **Compresses large contexts** automatically when you paste in a big codebase and ask a retrieval-style question — reducing token usage by 50–70% before the prompt reaches the model
 3. **Compresses large tool outputs** (`PostToolUse`) — `ls`, `grep`, `git diff/log/status` are structurally compacted with zero latency, and anything still large is run through Scaledown before it enters context
 4. **Summarizes on compaction** (`PreCompact`) — when the context window fills, the conversation is summarized by **Scaledown's summarize model** instead of Claude's default summarizer
@@ -44,8 +44,8 @@ On top of that, Claude gains four new tools it can call on demand:
 #### Option A: npm (recommended)
 
 ```bash
-npm install -g @scaledown/claude-plugin
-scaledown-claude setup
+npm install -g dietcode
+dietcode setup
 ```
 
 The setup wizard will:
@@ -62,8 +62,8 @@ Restart Claude Code and you're done.
 
 **1. Clone and build**
 ```bash
-git clone https://github.com/scaledown-team/scaledown-claude-plugin
-cd scaledown-claude-plugin
+git clone https://github.com/scaledown-team/DietCode
+cd DietCode
 npm install && npm run build
 ```
 
@@ -77,14 +77,14 @@ export SCALEDOWN_API_KEY="your-key-here"
 
 For personal use (stored in `~/.claude.json`):
 ```bash
-claude mcp add scaledown --transport stdio \
-  -- node /path/to/scaledown-claude-plugin/dist/src/index.js
+claude mcp add dietcode --transport stdio \
+  -- node /path/to/DietCode/dist/src/index.js
 ```
 
 To share with your team (stored in `.mcp.json`, commit this file):
 ```bash
-claude mcp add scaledown --transport stdio --scope project \
-  -- npx -y @scaledown/claude-plugin
+claude mcp add dietcode --transport stdio --scope project \
+  -- npx -y dietcode
 ```
 
 **4. Add the hook**
@@ -98,7 +98,7 @@ In `.claude/settings.json` at your project root (create if it doesn't exist):
         "hooks": [
           {
             "type": "command",
-            "command": "scaledown-claude-hook"
+            "command": "dietcode-hook"
           }
         ]
       }
@@ -109,14 +109,14 @@ In `.claude/settings.json` at your project root (create if it doesn't exist):
 
 If you cloned the repo instead of installing globally, use the full path:
 ```json
-"command": "node /path/to/scaledown-claude-plugin/dist/hooks/user-prompt-submit.js"
+"command": "node /path/to/DietCode/dist/hooks/user-prompt-submit.js"
 ```
 
 ### Cursor
 
 **1. Install the package**
 ```bash
-npm install -g @scaledown/claude-plugin
+npm install -g dietcode
 ```
 
 **2. Set your API key**
@@ -132,9 +132,9 @@ Create `.cursor/mcp.json` in your project root (or `~/.cursor/mcp.json` for glob
 ```json
 {
   "mcpServers": {
-    "scaledown": {
+    "dietcode": {
       "command": "npx",
-      "args": ["-y", "@scaledown/claude-plugin"],
+      "args": ["-y", "dietcode"],
       "env": {
         "SCALEDOWN_API_KEY": "your-key-here"
       }
@@ -143,7 +143,7 @@ Create `.cursor/mcp.json` in your project root (or `~/.cursor/mcp.json` for glob
 }
 ```
 
-**4. Restart Cursor.** The four Scaledown tools will be available in Agent mode.
+**4. Restart Cursor.** The four DietCode tools will be available in Agent mode.
 
 **5. (Recommended) Add Cursor rules**
 
@@ -152,14 +152,14 @@ Cursor has no hooks system, but you can give the agent behavioral guidance via `
 ```bash
 # Global (applies to all projects)
 mkdir -p ~/.cursor/rules
-cp node_modules/@scaledown/claude-plugin/cursor-rules/scaledown.mdc ~/.cursor/rules/
+cp node_modules/dietcode/cursor-rules/dietcode.mdc ~/.cursor/rules/
 
 # Or project-level
 mkdir -p .cursor/rules
-cp node_modules/@scaledown/claude-plugin/cursor-rules/scaledown.mdc .cursor/rules/
+cp node_modules/dietcode/cursor-rules/dietcode.mdc .cursor/rules/
 ```
 
-Or run `scaledown-claude setup` and answer **y** when asked about Cursor — it writes the file for you.
+Or run `dietcode setup` and answer **y** when asked about Cursor — it writes the file for you.
 
 This instructs the agent to call `sd_compress` before large file reads, `sd_summarize` after web fetches, and `sd_classify` at the start of ambiguous tasks.
 
@@ -169,21 +169,21 @@ This instructs the agent to call `sd_compress` before large file reads, `sd_summ
 
 **1. Install the package**
 ```bash
-npm install -g @scaledown/claude-plugin
+npm install -g dietcode
 ```
 
 **2. Add the MCP server**
 ```bash
-codex mcp add scaledown --env SCALEDOWN_API_KEY=your-key-here -- npx -y @scaledown/claude-plugin
+codex mcp add dietcode --env SCALEDOWN_API_KEY=your-key-here -- npx -y dietcode
 ```
 
 This writes to `~/.codex/config.toml`. To verify:
 ```toml
-[mcp_servers.scaledown]
+[mcp_servers.dietcode]
 command = "npx"
-args = ["-y", "@scaledown/claude-plugin"]
+args = ["-y", "dietcode"]
 
-[mcp_servers.scaledown.env]
+[mcp_servers.dietcode.env]
 SCALEDOWN_API_KEY = "your-key-here"
 ```
 
@@ -192,13 +192,13 @@ SCALEDOWN_API_KEY = "your-key-here"
 Codex CLI supports the same hook events as Claude Code. Run the setup wizard and answer **y** when asked about Codex CLI — it appends the following to `~/.codex/config.toml` automatically:
 
 ```toml
-# Scaledown hooks — added by scaledown-claude setup
+# DietCode hooks — added by dietcode setup
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
 type = "command"
 command = "node \"/path/to/hooks/user-prompt-submit.js\""
 timeout = 30
-statusMessage = "Scaledown: classifying intent..."
+statusMessage = "DietCode: classifying intent..."
 
 [[hooks.PostToolUse]]
 [[hooks.PostToolUse.hooks]]
@@ -217,10 +217,10 @@ timeout = 60
 
 **4. (Optional) Add AGENTS.md**
 
-Copy the provided template to your project root so Codex knows to use Scaledown tools proactively:
+Copy the provided template to your project root so Codex knows to use DietCode tools proactively:
 
 ```bash
-cp node_modules/@scaledown/claude-plugin/agents-md/AGENTS.md ./AGENTS.md
+cp node_modules/dietcode/agents-md/AGENTS.md ./AGENTS.md
 ```
 
 ---
@@ -241,7 +241,7 @@ cp node_modules/@scaledown/claude-plugin/agents-md/AGENTS.md ./AGENTS.md
 | Context progress bar | ✅ | ❌³ | ❌³ |
 | Auto config re-sync on update | ✅ | ✅ | ✅ |
 
-¹ Cursor rules instruct the agent to call Scaledown tools proactively — not a true hook, but effective in Agent mode.
+¹ Cursor rules instruct the agent to call DietCode tools proactively — not a true hook, but effective in Agent mode.
 ² Codex CLI's `PostToolUse` fires only for Bash tool events, not file reads or MCP calls.
 ³ Cursor and Codex CLI expose no status-line API. Savings still accrue (tracked in `~/.scaledown/stats.json`) but there is no place to display them.
 
@@ -254,7 +254,7 @@ cp node_modules/@scaledown/claude-plugin/agents-md/AGENTS.md ./AGENTS.md
 Nothing to do — the hook fires on every prompt. You'll see the intent hint in Claude's context, and large retrieval queries are silently compressed before they reach the model.
 
 ```
-[Scaledown intent: search (82%)]
+[DietCode intent: search (82%)]
 Find all places where we call the payments API
 ```
 
@@ -290,7 +290,7 @@ Use sd_extract to pull out all function names, file paths, and error codes from 
 
 Re-run setup to replace the key automatically:
 ```bash
-scaledown-claude setup
+dietcode setup
 ```
 
 Or edit your shell config directly:
@@ -330,9 +330,9 @@ export SCALEDOWN_COMPRESS_RATE=0.2
 ## Updating
 
 ```bash
-npm update -g @scaledown/claude-plugin
+npm update -g dietcode
 # or
-npm install -g @scaledown/claude-plugin@latest
+npm install -g dietcode@latest
 ```
 
 Your harness config (hooks, status line, Cursor/Codex blocks) is **automatically re-synced on update** for every harness you've already set up — you do not need to re-run setup. This happens two ways:
@@ -343,7 +343,7 @@ Your harness config (hooks, status line, Cursor/Codex blocks) is **automatically
 Reconcile only touches harnesses you've already configured — it never adds a harness you didn't opt into, and it preserves your own keys/sections. To force a re-sync immediately:
 
 ```bash
-scaledown-claude-reconcile
+dietcode-reconcile
 ```
 
 > The status line also shows when a new version is available and auto-updates minor versions in the background; major versions print the upgrade command.
@@ -352,18 +352,18 @@ scaledown-claude-reconcile
 
 ## Uninstalling
 
-Remove all Scaledown integration from every configured harness with one command:
+Remove all DietCode integration from every configured harness with one command:
 
 ```bash
-scaledown-claude uninstall
+dietcode uninstall
 ```
 
-This strips the hooks, status line, and auto-compact env var from `~/.claude/settings.json`, removes the managed block from `~/.codex/config.toml`, deletes `~/.cursor/rules/scaledown.mdc`, and unregisters the MCP server from Claude Code — all while preserving any of your own config in those files.
+This strips the hooks, status line, and auto-compact env var from `~/.claude/settings.json`, removes the managed block from `~/.codex/config.toml`, deletes `~/.cursor/rules/dietcode.mdc`, and unregisters the MCP server from Claude Code — all while preserving any of your own config in those files.
 
 Then remove the package and (optionally) your data:
 
 ```bash
-npm uninstall -g @scaledown/claude-plugin
+npm uninstall -g dietcode
 rm -rf ~/.scaledown          # API key + saved-token stats (optional)
 ```
 
@@ -378,9 +378,9 @@ export CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=50
 
 | Harness | What to remove |
 |---|---|
-| Claude Code | `hooks` (UserPromptSubmit/PostToolUse/PreCompact) + `statusLine` + `env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` from `~/.claude/settings.json`; `claude mcp remove --scope user scaledown` |
-| Cursor | Delete `~/.cursor/rules/scaledown.mdc` (or `.cursor/rules/scaledown.mdc`); remove the `scaledown` entry from `.cursor/mcp.json` |
-| Codex CLI | Remove the `# Scaledown hooks` block and `[mcp_servers.scaledown]` from `~/.codex/config.toml` |
+| Claude Code | `hooks` (UserPromptSubmit/PostToolUse/PreCompact) + `statusLine` + `env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` from `~/.claude/settings.json`; `claude mcp remove --scope user dietcode` |
+| Cursor | Delete `~/.cursor/rules/dietcode.mdc` (or `.cursor/rules/dietcode.mdc`); remove the `dietcode` entry from `.cursor/mcp.json` |
+| Codex CLI | Remove the `# DietCode hooks` block and `[mcp_servers.dietcode]` from `~/.codex/config.toml` |
 
 ---
 
@@ -397,8 +397,8 @@ Conversational messages that happen to be long (e.g. a big code block you're ask
 ## Development
 
 ```bash
-git clone https://github.com/scaledown-team/scaledown-claude-plugin
-cd scaledown-claude-plugin
+git clone https://github.com/scaledown-team/DietCode
+cd DietCode
 npm install
 
 npm test          # run unit tests

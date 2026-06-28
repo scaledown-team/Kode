@@ -1,6 +1,6 @@
-# Scaledown Context Optimization
+# DietCode Context Optimization
 
-The Scaledown MCP server is connected. Use its tools proactively to reduce token usage and keep context lean throughout the session.
+The DietCode MCP server is connected. Use its tools proactively to reduce token usage and keep context lean throughout the session.
 
 ## When to use each tool
 
@@ -14,6 +14,6 @@ The Scaledown MCP server is connected. Use its tools proactively to reduce token
 
 ## General principles
 
-- Do not wait to be asked. If context is growing unwieldy, invoke the appropriate Scaledown tool before it becomes a problem.
+- Do not wait to be asked. If context is growing unwieldy, invoke the appropriate DietCode tool before it becomes a problem.
 - For needle-in-a-haystack queries (finding a specific function, symbol, or pattern in a large codebase), always compress the search corpus first.
 - After any web fetch, summarize before adding the content to context.

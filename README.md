@@ -12,36 +12,46 @@ Every time you submit a prompt, the plugin (via hooks in Claude Code and Codex C
 4. **Summarizes on compaction** (`PreCompact`) — when the context window fills, the conversation is summarized by **Scaledown's summarize model** instead of Claude's default summarizer
 5. **Tracks token savings** — every compression/summarization is counted, shown live in the Claude Code status line (`↓ 125.4K saved · 747 reqs`)
 
-On top of that, Claude gains four new tools it can call on demand:
+On top of that, your agent gains four tools it can call on demand in **all three clients**:
 
 | Tool | What it does |
 |---|---|
 | `sd_compress` | Compress a large context block before a needle-in-a-haystack query |
-| `sd_summarize` | Abstractively summarize text — useful for compacting long conversations |
-| `sd_classify` | Classify text against custom labels (e.g. bug vs. feature vs. question) |
+| `sd_summarize` | Abstractively summarize text to compact long conversations |
+| `sd_classify` | Classify text against custom labels (bug vs. feature vs. question) |
 | `sd_extract` | Extract named entities or structured data from any text |
 
 > **Status line / savings display is Claude Code only.** Cursor and Codex CLI have no status-line API, so token savings still happen there but aren't displayed. This is an npm CLI plugin — there is no VS Code/IDE extension; the "status line" refers to Claude Code's terminal status line.
 
 ---
 
-## Requirements
+## How it works (30 seconds)
 
-- Node.js 18 or later
-- A Scaledown API key — get one free at [scaledown.ai/dashboard](https://scaledown.ai/dashboard)
-- One of: [Claude Code](https://claude.ai/code), [Cursor](https://cursor.com), or [OpenAI Codex CLI](https://github.com/openai/codex)
+```
+your prompt ──▶ [intent classify] ──▶ [needle-in-haystack?] ──▶ compress ──▶ agent
+                     │                        │
+                 one-line hint          /compress/raw/  (50-70% smaller)
+```
+
+- **Intent hints** route the agent to the right tool, cheaply, on every prompt.
+- **Auto-compression** only fires on prompts that are both *large* and
+  *retrieval-intent*. Conversational prompts and code you're asking it to write
+  are left untouched.
+- **On-demand tools** give you manual control in any client.
 
 ---
 
-## Installation
+## Get started (60 seconds)
 
 > **Supported clients:** Claude Code · Cursor · OpenAI Codex CLI
 >
 > The MCP tools (`sd_compress`, `sd_summarize`, `sd_classify`, `sd_extract`) work in all three clients. Automatic hooks (`UserPromptSubmit`, `PostToolUse`, `PreCompact`) work in Claude Code and Codex CLI. Cursor has no hook system — use the [Cursor rules](#cursor) to drive proactive tool use instead.
 
-### Claude Code
+- Node.js 18 or later
+- A Scaledown API key, free at [scaledown.ai/dashboard](https://scaledown.ai/dashboard)
+- One of: [Claude Code](https://claude.ai/code) · [Cursor](https://cursor.com) · [Codex CLI](https://github.com/openai/codex)
 
-#### Option A: npm (recommended)
+### Claude Code (recommended)
 
 ```bash
 npm install -g dietcode
@@ -58,7 +68,8 @@ The setup wizard will:
 
 Restart Claude Code and you're done.
 
-#### Option B: manual
+<details>
+<summary>Manual setup</summary>
 
 **1. Clone and build**
 ```bash
@@ -69,27 +80,24 @@ npm install && npm run build
 
 **2. Set your API key**
 ```bash
-export SCALEDOWN_API_KEY="your-key-here"
-# Add the above line to ~/.zshrc or ~/.bashrc to persist it
+export SCALEDOWN_API_KEY="your-key-here"   # add to ~/.zshrc or ~/.bashrc to persist
 ```
 
 **3. Register the MCP server**
 
-For personal use (stored in `~/.claude.json`):
+Personal use (`~/.claude.json`):
 ```bash
 claude mcp add dietcode --transport stdio \
   -- node /path/to/DietCode/dist/src/index.js
 ```
 
-To share with your team (stored in `.mcp.json`, commit this file):
+Team use (`.mcp.json`, commit this file):
 ```bash
 claude mcp add dietcode --transport stdio --scope project \
   -- npx -y dietcode
 ```
 
-**4. Add the hook**
-
-In `.claude/settings.json` at your project root (create if it doesn't exist):
+**4. Add the hook** to `.claude/settings.json`:
 ```json
 {
   "hooks": {
@@ -106,15 +114,14 @@ In `.claude/settings.json` at your project root (create if it doesn't exist):
   }
 }
 ```
-
-If you cloned the repo instead of installing globally, use the full path:
+If you cloned instead of installing globally, use the full path:
 ```json
 "command": "node /path/to/DietCode/dist/hooks/user-prompt-submit.js"
 ```
+</details>
 
 ### Cursor
 
-**1. Install the package**
 ```bash
 npm install -g dietcode
 ```
@@ -122,13 +129,9 @@ npm install -g dietcode
 **2. Set your API key**
 ```bash
 export SCALEDOWN_API_KEY="your-key-here"
-# Add the above line to ~/.zshrc or ~/.bashrc to persist it
 ```
 
-**3. Add the MCP server**
-
-Create `.cursor/mcp.json` in your project root (or `~/.cursor/mcp.json` for global use):
-
+Create `.cursor/mcp.json` (or `~/.cursor/mcp.json` for global use):
 ```json
 {
   "mcpServers": {
@@ -142,6 +145,7 @@ Create `.cursor/mcp.json` in your project root (or `~/.cursor/mcp.json` for glob
   }
 }
 ```
+Restart Cursor. The four tools appear in Agent mode.
 
 **4. Restart Cursor.** The four DietCode tools will be available in Agent mode.
 
@@ -167,7 +171,6 @@ This instructs the agent to call `sd_compress` before large file reads, `sd_summ
 
 ### OpenAI Codex CLI
 
-**1. Install the package**
 ```bash
 npm install -g dietcode
 ```
@@ -176,8 +179,7 @@ npm install -g dietcode
 ```bash
 codex mcp add dietcode --env SCALEDOWN_API_KEY=your-key-here -- npx -y dietcode
 ```
-
-This writes to `~/.codex/config.toml`. To verify:
+This writes to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.dietcode]
 command = "npx"
@@ -249,37 +251,18 @@ cp node_modules/dietcode/agents-md/AGENTS.md ./AGENTS.md
 
 ## Usage
 
-### Automatic (hook)
-
-Nothing to do — the hook fires on every prompt. You'll see the intent hint in Claude's context, and large retrieval queries are silently compressed before they reach the model.
-
+**Automatic (Claude Code hook):** nothing to do; the hook fires on every prompt:
 ```
 [DietCode intent: search (82%)]
 Find all places where we call the payments API
 ```
 
-### On-demand tools
-
-Ask Claude to use any of the four tools directly:
-
-**Compress a large context**
+**On-demand tools:** ask the agent directly:
 ```
 Use sd_compress to compress this before searching through it: [paste large codebase]
-```
-
-**Summarize a long conversation**
-```
-Use sd_summarize to condense this thread so we can keep working without hitting the context limit
-```
-
-**Classify text**
-```
+Use sd_summarize to condense this thread so we can keep working
 Use sd_classify to categorize these GitHub issues as bug, feature, or question
-```
-
-**Extract structured data**
-```
-Use sd_extract to pull out all function names, file paths, and error codes from this stack trace
+Use sd_extract to pull function names, file paths, and error codes from this stack trace
 ```
 
 ---
@@ -319,7 +302,6 @@ Set these environment variables to tune behavior:
 | `SCALEDOWN_SHOW_PROGRESS` | `true` | Set to `false` to hide the per-prompt context progress bar |
 | `SCALEDOWN_MAX_CONTEXT_TOKENS` | `200000` | Context-window size used for the progress bar / compaction math |
 
-Example — compress more aggressively, lower threshold:
 ```bash
 export SCALEDOWN_COMPRESS_THRESHOLD=5000
 export SCALEDOWN_COMPRESS_RATE=0.2
@@ -386,11 +368,12 @@ export CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=50
 
 ## How compression works
 
-The plugin uses a local heuristic to detect "needle-in-a-haystack" queries — prompts that are both large *and* retrieval-intent (containing keywords like `find`, `search`, `where`, `what does ... do`, etc.).
-
-When detected, the full prompt is sent to Scaledown's `/compress/raw/` endpoint, which rewrites it into a semantically equivalent but much shorter form. The compressed version replaces the original before Claude sees it.
-
-Conversational messages that happen to be long (e.g. a big code block you're asking Claude to write from scratch) are left alone.
+Kode uses a local heuristic to detect "needle-in-a-haystack" queries: prompts
+that are both large *and* retrieval-intent (`find`, `search`, `where`,
+`what does ... do`, etc.). When detected, the prompt is sent to Scaledown's
+`/compress/raw/` endpoint, which rewrites it into a semantically equivalent but
+much shorter form before the agent sees it. Long conversational prompts (e.g. code
+you're asking it to write from scratch) are left alone.
 
 ---
 
@@ -400,19 +383,17 @@ Conversational messages that happen to be long (e.g. a big code block you're ask
 git clone https://github.com/scaledown-team/DietCode
 cd DietCode
 npm install
-
-npm test          # run unit tests
+npm test          # unit tests
 npm run build     # compile TypeScript
 ```
 
-**Test the hook manually:**
+Test the hook:
 ```bash
-npm run build
 echo '{"prompt":"find the function that handles auth"}' \
   | SCALEDOWN_API_KEY=your-key node dist/hooks/user-prompt-submit.js
 ```
 
-**Test the MCP server starts:**
+Test the MCP server starts:
 ```bash
 SCALEDOWN_API_KEY=test echo '{}' | node dist/src/index.js
 ```

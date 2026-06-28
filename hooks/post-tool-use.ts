@@ -444,7 +444,7 @@ async function main(): Promise<void> {
   const structuralSaving = estimateTokens(text) - estimateTokens(filtered);
   if (structuralSaving > 0) {
     process.stderr.write(
-      `scaledown: structural filter (${commandType}) saved ${structuralSaving} tokens\n`
+      `dietcode: structural filter (${commandType}) saved ${structuralSaving} tokens\n`
     );
     addSaving(sessionId, structuralSaving);
   }
@@ -466,7 +466,7 @@ async function main(): Promise<void> {
       const result = await client.summarize(filtered);
       const summarizeSaved = estimateTokens(filtered) - estimateTokens(result.summary);
       process.stderr.write(
-        `scaledown: summarized Read output (${result.input_chars} → ${result.output_chars} chars, saved ~${filtered.length - result.output_chars})\n`
+        `dietcode: summarized Read output (${result.input_chars} → ${result.output_chars} chars, saved ~${filtered.length - result.output_chars})\n`
       );
       addSaving(sessionId, summarizeSaved);
       addRequest();
@@ -474,12 +474,18 @@ async function main(): Promise<void> {
         JSON.stringify({ tool_response: replaceText(tool_response, result.summary) })
       );
     } else {
-      const result = await client.compress(filtered, "", config.compressRate);
+      // The compress endpoint rejects an empty prompt (HTTP 200 + error body),
+      // so pass a non-empty instruction alongside the tool output as context.
+      const result = await client.compress(
+        filtered,
+        "Preserve this tool output.",
+        config.compressRate
+      );
       const origTokens = result.original_prompt_tokens ?? estimateTokens(filtered);
       const compTokens = result.compressed_prompt_tokens ?? (result.compressed_prompt ? estimateTokens(result.compressed_prompt) : 0);
       const saved = origTokens - compTokens;
       process.stderr.write(
-        `scaledown: compressed tool output (${origTokens} → ${compTokens} tokens, saved ${saved})\n`
+        `dietcode: compressed tool output (${origTokens} → ${compTokens} tokens, saved ${saved})\n`
       );
       addSaving(sessionId, saved);
       addRequest();
@@ -491,7 +497,7 @@ async function main(): Promise<void> {
     }
   } catch (err) {
     process.stderr.write(
-      `scaledown: post-tool compression failed, using filtered output: ${String(err)}\n`
+      `dietcode: post-tool compression failed, using filtered output: ${String(err)}\n`
     );
     // Fail open: emit structurally filtered output even when API fails.
     if (filtered !== text) {
@@ -519,6 +525,6 @@ function readStdin(): Promise<string> {
 }
 
 main().catch((err) => {
-  process.stderr.write(`scaledown post-tool hook error: ${String(err)}\n`);
+  process.stderr.write(`dietcode post-tool hook error: ${String(err)}\n`);
   process.stdout.write("{}");
 });

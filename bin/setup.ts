@@ -7,6 +7,40 @@ import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { ScaledownClient } from "../src/client.js";
 import { CONFIG_FILE } from "../src/config.js";
+import { CURSOR_RULES_CONTENT } from "../src/reconcile.js";
+
+// TOML helpers (no external dep — we only need simple array-of-table writes)
+function tomlStringValue(s: string): string {
+  return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+function buildCodexHooksToml(hookDir: string): string {
+  const ups = resolve(hookDir, "user-prompt-submit.js");
+  const ptu = resolve(hookDir, "post-tool-use.js");
+  const pc = resolve(hookDir, "pre-compact.js");
+  return [
+    `# DietCode hooks — added by dietcode setup`,
+    `[[hooks.UserPromptSubmit]]`,
+    `[[hooks.UserPromptSubmit.hooks]]`,
+    `type = "command"`,
+    `command = ${tomlStringValue(`node "${ups}"`)}`,
+    `timeout = 30`,
+    `statusMessage = "DietCode: classifying intent..."`,
+    ``,
+    `[[hooks.PostToolUse]]`,
+    `[[hooks.PostToolUse.hooks]]`,
+    `type = "command"`,
+    `command = ${tomlStringValue(`node "${ptu}"`)}`,
+    `timeout = 30`,
+    ``,
+    `[[hooks.PreCompact]]`,
+    `[[hooks.PreCompact.hooks]]`,
+    `type = "command"`,
+    `command = ${tomlStringValue(`node "${pc}"`)}`,
+    `timeout = 60`,
+    ``,
+  ].join("\n");
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST_ROOT = resolve(__dirname, "..");
@@ -64,32 +98,43 @@ function storeApiKey(apiKey: string): void {
 
 function registerMcp(): void {
   const entryPoint = resolve(DIST_ROOT, "src", "index.js");
+  // Migrate the pre-rename MCP id if present (best-effort, ignore if absent).
   try {
-    execSync(`claude mcp add --scope user scaledown -- node "${entryPoint}"`, {
+    execSync("claude mcp remove --scope user scaledown", { stdio: "ignore" });
+  } catch {
+    // not registered under the old name — fine
+  }
+  try {
+    execSync(`claude mcp add --scope user dietcode -- node "${entryPoint}"`, {
       stdio: "inherit",
     });
     console.log("  ✓ MCP server registered globally with Claude Code");
   } catch {
     console.warn(
       "  ⚠ Could not register MCP server automatically.\n" +
-        `    Run manually: claude mcp add --scope user scaledown -- node "${entryPoint}"`
+        `    Run manually: claude mcp add --scope user dietcode -- node "${entryPoint}"`
     );
   }
 }
 
 function writeAgent(): void {
   const agentsDir = resolve(homedir(), ".claude", "agents");
-  const agentPath = resolve(agentsDir, "scaledown.md");
+  // Remove the pre-rename agent file so we don't leave a stale duplicate.
+  const oldAgentPath = resolve(agentsDir, "scaledown.md");
+  const agentPath = resolve(agentsDir, "dietcode.md");
 
   if (!existsSync(agentsDir)) {
     mkdirSync(agentsDir, { recursive: true });
+  }
+  if (existsSync(oldAgentPath)) {
+    try { execSync(`rm -f "${oldAgentPath}"`); } catch { /* non-fatal */ }
   }
 
   writeFileSync(
     agentPath,
     `---
-name: scaledown
-description: Scaledown-enhanced agent — context compression and intent routing active
+name: dietcode
+description: DietCode-enhanced agent — context compression and intent routing active
 model: inherit
 ---
 `,
@@ -147,8 +192,55 @@ function writeHooks(): void {
   console.log(`  ✓ Hooks written to ${settingsPath}`);
 }
 
+function registerCodexHooks(): void {
+  const codexConfigDir = resolve(homedir(), ".codex");
+  const codexConfigPath = resolve(codexConfigDir, "config.toml");
+  const hookDir = resolve(DIST_ROOT, "hooks");
+  const tomlBlock = buildCodexHooksToml(hookDir);
+
+  if (!existsSync(codexConfigDir)) {
+    mkdirSync(codexConfigDir, { recursive: true });
+  }
+
+  const existing = existsSync(codexConfigPath)
+    ? readFileSync(codexConfigPath, "utf8")
+    : "";
+
+  if (/# (?:DietCode|Scaledown) hooks/.test(existing)) {
+    // Replace existing block (migrates a pre-rename Scaledown block too)
+    const updated = existing.replace(
+      /# (?:DietCode|Scaledown) hooks[\s\S]*?(?=\n\[(?!\[|hooks\b)|$)/,
+      tomlBlock
+    );
+    writeFileSync(codexConfigPath, updated, "utf8");
+  } else {
+    writeFileSync(codexConfigPath, existing + "\n" + tomlBlock, "utf8");
+  }
+  console.log(`  ✓ Codex CLI hooks written to ${codexConfigPath}`);
+}
+
+function writeCursorRules(scope: "project" | "global"): void {
+  const rulesDir =
+    scope === "global"
+      ? resolve(homedir(), ".cursor", "rules")
+      : resolve(process.cwd(), ".cursor", "rules");
+
+  if (!existsSync(rulesDir)) {
+    mkdirSync(rulesDir, { recursive: true });
+  }
+
+  const rulesPath = resolve(rulesDir, "dietcode.mdc");
+  // Remove a pre-rename rules file in the same scope if present.
+  const legacyRulesPath = resolve(rulesDir, "scaledown.mdc");
+  if (existsSync(legacyRulesPath)) {
+    try { execSync(`rm -f "${legacyRulesPath}"`); } catch { /* non-fatal */ }
+  }
+  writeFileSync(rulesPath, CURSOR_RULES_CONTENT, "utf8");
+  console.log(`  ✓ Cursor rules written to ${rulesPath}`);
+}
+
 async function main(): Promise<void> {
-  console.log("\n🔧 Scaledown Claude Code Plugin Setup\n");
+  console.log("\n🔧 DietCode Setup\n");
 
   // Step 1: Open browser for API key
   console.log("Opening scaledown.ai to get your API key...");
@@ -204,23 +296,43 @@ async function main(): Promise<void> {
   writeAgent();
   writeHooks();
 
-  // Step 7: Summary
+  // Step 7: Optional Codex CLI hooks
+  const useCodex = await prompt("\nDo you also use OpenAI Codex CLI? (y/N): ");
+  if (useCodex.toLowerCase() === "y") {
+    console.log("\nRegistering Codex CLI hooks...");
+    registerCodexHooks();
+  }
+
+  // Step 8: Optional Cursor rules
+  const useCursor = await prompt("\nDo you also use Cursor? (y/N): ");
+  if (useCursor.toLowerCase() === "y") {
+    const cursorScope = await prompt(
+      "Install Cursor rules globally (~/.cursor/rules) or for this project (.cursor/rules)? (global/project): "
+    );
+    const scope = cursorScope.trim().toLowerCase().startsWith("p")
+      ? "project"
+      : "global";
+    console.log("\nWriting Cursor rules...");
+    writeCursorRules(scope);
+  }
+
+  // Step 9: Summary
   const rcFile2 = detectRcFile();
   console.log(`
-✅ Scaledown is ready!
+✅ DietCode is ready!
 
   To use the API key in your current terminal session, run:
     source ${rcFile2}
   (New terminal windows will pick it up automatically.)
 
 Active features:
-  • "scaledown" badge shown in the Claude Code text input
-  • Co-Authored-By: Scaledown trailer added to every git commit
+  • "dietcode" badge shown in the Claude Code text input
+  • Co-Authored-By: DietCode trailer added to every git commit
   • Intent hint prepended to every prompt (helps Claude pick the right tool)
   • Context progress bar shown on every prompt (e.g. [████░░░░░░] 42%)
   • Auto-compression for large NIAH-style queries (threshold: ${process.env.SCALEDOWN_COMPRESS_THRESHOLD ?? "10000"} tokens, rate: ${process.env.SCALEDOWN_COMPRESS_RATE ?? "0.3"})
   • Post-tool output compression — large tool results are compressed before entering context (threshold: ${process.env.SCALEDOWN_POST_TOOL_THRESHOLD ?? "4000"} tokens)
-  • Context compaction via Scaledown at ${process.env.SCALEDOWN_COMPACT_THRESHOLD ?? "25"}% usage (replaces Claude's default summarization)
+  • Context compaction via Scaledown's summarize model at ${process.env.SCALEDOWN_COMPACT_THRESHOLD ?? "50"}% usage (replaces Claude's default summarization)
   • Token savings counter shown below the Claude Code text input (updates every 5s)
 
 Environment variables:
@@ -240,7 +352,49 @@ Docs: https://docs.scaledown.ai
 `);
 }
 
-main().catch((err) => {
-  console.error("Setup failed:", err);
+async function uninstall(): Promise<void> {
+  console.log("\n🧹 Removing DietCode integration\n");
+
+  const { uninstallAll } = await import("../src/reconcile.js");
+  const result = uninstallAll();
+
+  if (result.claude) console.log("  ✓ Removed hooks + status line from ~/.claude/settings.json");
+  if (result.codex) console.log("  ✓ Removed hooks from ~/.codex/config.toml");
+  if (result.cursor) console.log("  ✓ Removed Cursor rules from ~/.cursor/rules/");
+
+  // Unregister the MCP server (current + pre-rename id) from Claude Code.
+  let mcpRemoved = false;
+  for (const id of ["dietcode", "scaledown"]) {
+    try {
+      execSync(`claude mcp remove --scope user ${id}`, { stdio: "ignore" });
+      mcpRemoved = true;
+    } catch {
+      // not registered under this id — fine
+    }
+  }
+  if (mcpRemoved) console.log("  ✓ Unregistered MCP server from Claude Code");
+
+  if (!result.claude && !result.codex && !result.cursor) {
+    console.log("  Nothing to remove — no DietCode config found.");
+  }
+
+  console.log(`
+✅ DietCode integration removed.
+
+Left in place (remove manually if you want them gone):
+  • Package:   npm uninstall -g dietcode
+  • API key + stats:  rm -rf ~/.scaledown
+  • Shell env vars in your ~/.zshrc / ~/.bashrc (SCALEDOWN_API_KEY, CLAUDE_AUTOCOMPACT_PCT_OVERRIDE)
+  • Cursor/Codex MCP server entries you added by hand
+
+Restart your coding tool for changes to take effect.
+`);
+}
+
+const command = process.argv[2];
+const run = command === "uninstall" ? uninstall : main;
+
+run().catch((err) => {
+  console.error(`${command === "uninstall" ? "Uninstall" : "Setup"} failed:`, err);
   process.exit(1);
 });

@@ -1,0 +1,30 @@
+{
+  "name": "dietcode",
+  "version": "0.4.0",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "node ./dist/hooks/user-prompt-submit.js" }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "node ./dist/hooks/post-tool-use.js" }]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "node ./dist/hooks/pre-compact.js" }]
+      }
+    ]
+  },
+  "mcpServers": {
+    "dietcode": {
+      "command": "node",
+      "args": ["./dist/src/index.js"]
+    }
+  }
+}

@@ -32,10 +32,10 @@ async function main(): Promise<void> {
       encoding: "utf8",
       stdio: ["pipe", "pipe", "pipe"],
     });
-    if (lastCommit.includes("Co-Authored-By: Scaledown")) process.exit(0);
+    if (/Co-Authored-By: (DietCode|Scaledown)/.test(lastCommit)) process.exit(0);
 
     execSync(
-      'git commit --amend --no-edit --trailer "Co-Authored-By: Scaledown <ai@scaledown.ai>"',
+      'git commit --amend --no-edit --trailer "Co-Authored-By: DietCode <ai@scaledown.ai>"',
       { stdio: "pipe" }
     );
   } catch {

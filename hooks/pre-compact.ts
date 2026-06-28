@@ -84,14 +84,14 @@ async function main(): Promise<void> {
   const client = new ScaledownClient(config.apiKey);
   try {
     process.stderr.write(
-      `scaledown: summarizing context (${trigger}, compact #${compactNumber}, ${messages_to_compact.length} messages)...\n`
+      `dietcode: summarizing context (${trigger}, compact #${compactNumber}, ${messages_to_compact.length} messages)...\n`
     );
     const result = await client.summarize(conversationText, instructions);
     const ratio = result.input_chars > 0
       ? Math.round((1 - result.output_chars / result.input_chars) * 100)
       : 0;
     process.stderr.write(
-      `scaledown: summary complete — ${result.input_chars} → ${result.output_chars} chars (-${ratio}%)\n`
+      `dietcode: summary complete — ${result.input_chars} → ${result.output_chars} chars (-${ratio}%)\n`
     );
     const saved = Math.max(0, estimateTokens(conversationText) - estimateTokens(result.summary));
     addSaving(input.session_id ?? "compact", saved);
@@ -99,7 +99,7 @@ async function main(): Promise<void> {
     process.stdout.write(JSON.stringify({ summary: result.summary }));
   } catch (err) {
     process.stderr.write(
-      `scaledown: summarization failed, falling back to Claude default: ${String(err)}\n`
+      `dietcode: summarization failed, falling back to Claude default: ${String(err)}\n`
     );
     process.stdout.write("{}");
   }
@@ -120,6 +120,6 @@ function readStdin(): Promise<string> {
 }
 
 main().catch((err) => {
-  process.stderr.write(`scaledown pre-compact hook error: ${String(err)}\n`);
+  process.stderr.write(`dietcode pre-compact hook error: ${String(err)}\n`);
   process.stdout.write("{}");
 });

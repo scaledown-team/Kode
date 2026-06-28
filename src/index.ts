@@ -12,8 +12,8 @@ const config = loadConfig();
 const client = new ScaledownClient(config.apiKey);
 
 const server = new McpServer({
-  name: "scaledown",
-  version: "0.1.0",
+  name: "dietcode",
+  version: "0.4.0",
 });
 
 registerCompressTool(server, client, config);

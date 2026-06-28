@@ -1,0 +1,170 @@
+name: Benchmark
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.0.0'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Plugin version tag to benchmark (e.g. v1.0.0). Leave empty to use current checkout.'
+        required: false
+        default: ''
+
+jobs:
+  terminal-bench:
+    name: terminal-bench (Scaledown vs baseline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Build plugin
+        run: npm ci && npm run build
+
+      # Harbor requires Docker and uv (Python toolchain manager)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: latest
+
+      - name: Install Harbor CLI
+        run: uv tool install harbor-framework
+
+      # ---- Baseline run (stock Claude Code, no Scaledown) ----
+      - name: Run baseline benchmark (Claude Code, no plugin)
+        run: |
+          harbor run \
+            --dataset terminal-bench@2.0 \
+            --agent claude-code \
+            --model anthropic/claude-sonnet-4-6 \
+            --n-concurrent 2 \
+            --output-dir /tmp/results/baseline
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      # ---- Scaledown run ----
+      # We build a custom Claude Code agent image that pre-loads the Scaledown plugin.
+      # Harbor supports --agent-dockerfile for custom agent environments.
+      - name: Write Scaledown agent Dockerfile
+        run: |
+          cat > /tmp/Dockerfile.scaledown-agent << 'EOF'
+          FROM node:20-slim
+          RUN npm install -g @anthropic-ai/claude-code
+          # Copy the plugin we just built
+          COPY . /scaledown-plugin
+          WORKDIR /scaledown-plugin
+          RUN npm ci && npm run build
+          # Pre-configure plugin via settings
+          RUN mkdir -p /root/.claude && cat > /root/.claude/settings.json << 'SETTINGS'
+          {
+            "hooks": {
+              "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": "node /scaledown-plugin/dist/hooks/user-prompt-submit.js"}]}],
+              "PostToolUse": [{"matcher": "", "hooks": [{"type": "command", "command": "node /scaledown-plugin/dist/hooks/post-tool-use.js"}]}],
+              "PreCompact": [{"matcher": "", "hooks": [{"type": "command", "command": "node /scaledown-plugin/dist/hooks/pre-compact.js"}]}]
+            },
+            "mcpServers": {
+              "scaledown": {"command": "node", "args": ["/scaledown-plugin/dist/src/index.js"]}
+            }
+          }
+          SETTINGS
+          WORKDIR /workspace
+          EOF
+
+      - name: Run Scaledown benchmark (Claude Code + Scaledown plugin)
+        run: |
+          harbor run \
+            --dataset terminal-bench@2.0 \
+            --agent claude-code \
+            --model anthropic/claude-sonnet-4-6 \
+            --n-concurrent 2 \
+            --agent-dockerfile /tmp/Dockerfile.scaledown-agent \
+            --output-dir /tmp/results/scaledown
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SCALEDOWN_API_KEY: ${{ secrets.SCALEDOWN_API_KEY }}
+
+      # ---- Compare results ----
+      - name: Compare baseline vs Scaledown results
+        run: |
+          node << 'SCRIPT'
+          const fs = require('fs');
+
+          function loadResults(dir) {
+            if (!fs.existsSync(dir)) return [];
+            return fs.readdirSync(dir)
+              .filter(f => f.endsWith('.json'))
+              .map(f => {
+                try { return JSON.parse(fs.readFileSync(`${dir}/${f}`, 'utf8')); }
+                catch { return null; }
+              })
+              .filter(Boolean);
+          }
+
+          const baseline = loadResults('/tmp/results/baseline');
+          const scaledown = loadResults('/tmp/results/scaledown');
+
+          const baselineByTask = Object.fromEntries(baseline.map(r => [r.task_id ?? r.task, r]));
+          const scaledownByTask = Object.fromEntries(scaledown.map(r => [r.task_id ?? r.task, r]));
+
+          const tasks = [...new Set([...Object.keys(baselineByTask), ...Object.keys(scaledownByTask)])];
+          const rows = tasks.map(task => {
+            const b = baselineByTask[task];
+            const s = scaledownByTask[task];
+            const bTokens = b?.input_tokens ?? b?.tokens_used ?? 'N/A';
+            const sTokens = s?.input_tokens ?? s?.tokens_used ?? 'N/A';
+            const reduction = (typeof bTokens === 'number' && typeof sTokens === 'number')
+              ? `${(((bTokens - sTokens) / bTokens) * 100).toFixed(1)}%`
+              : 'N/A';
+            return { task, bPass: b?.passed ?? 'N/A', sPass: s?.passed ?? 'N/A', bTokens, sTokens, reduction };
+          });
+
+          const bTotal = baseline.length, bPassed = baseline.filter(r => r.passed).length;
+          const sTotal = scaledown.length, sPassed = scaledown.filter(r => r.passed).length;
+
+          const table = [
+            '# terminal-bench Results',
+            '',
+            `**Baseline:** ${bPassed}/${bTotal} tasks passed`,
+            `**Scaledown:** ${sPassed}/${sTotal} tasks passed`,
+            '',
+            '| Task | Baseline Pass | Scaledown Pass | Baseline Tokens | Scaledown Tokens | Token Reduction |',
+            '|------|:---:|:---:|---:|---:|---:|',
+            ...rows.map(r => `| ${r.task} | ${r.bPass} | ${r.sPass} | ${r.bTokens} | ${r.sTokens} | ${r.reduction} |`),
+            '',
+            `*Run at ${new Date().toISOString()} on terminal-bench@2.0 with claude-sonnet-4-6*`,
+          ].join('\n');
+
+          fs.writeFileSync('/tmp/results/comparison.md', table);
+          console.log(table);
+          SCRIPT
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.ref_name }}
+          path: /tmp/results/
+          retention-days: 90
+
+      - name: Post comparison to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f /tmp/results/comparison.md ]; then
+            gh release edit "${{ github.ref_name }}" \
+              --repo "${{ github.repository }}" \
+              --notes-file /tmp/results/comparison.md
+          else
+            echo "No comparison.md found, skipping release post."
+          fi

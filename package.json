@@ -11,7 +11,8 @@
     "scaledown-claude-hook": "./dist/hooks/user-prompt-submit.js",
     "scaledown-claude-post-tool-use": "./dist/hooks/post-tool-use.js",
     "scaledown-claude-git-attribution": "./dist/hooks/git-attribution.js",
-    "scaledown-claude-status": "./dist/hooks/status.js"
+    "scaledown-claude-status": "./dist/hooks/status.js",
+    "scaledown-claude-reconcile": "./dist/bin/postinstall.js"
   },
   "main": "./dist/src/index.js",
   "files": [
@@ -20,7 +21,13 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "jest",
+    "postinstall": "node ./dist/bin/postinstall.js || true",
+    "test": "jest --testPathIgnorePatterns='/node_modules/' --testPathIgnorePatterns='real-api'",
+    "test:unit": "jest --testPathPattern='(client|niah|post-tool-use|user-prompt-submit)\\.test'",
+    "test:integration": "jest --testPathPattern='(integration|mcp-contract)\\.test'",
+    "test:config": "jest --testPathPattern='config-formats\\.test'",
+    "test:hooks": "jest --testPathPattern='hook-integration\\.test' --testTimeout=120000",
+    "test:real": "jest --testPathPattern='real-api\\.test'",
     "start": "node dist/src/index.js"
   },
   "dependencies": {

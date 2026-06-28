@@ -474,7 +474,13 @@ async function main(): Promise<void> {
         JSON.stringify({ tool_response: replaceText(tool_response, result.summary) })
       );
     } else {
-      const result = await client.compress(filtered, "", config.compressRate);
+      // The compress endpoint rejects an empty prompt (HTTP 200 + error body),
+      // so pass a non-empty instruction alongside the tool output as context.
+      const result = await client.compress(
+        filtered,
+        "Preserve this tool output.",
+        config.compressRate
+      );
       const origTokens = result.original_prompt_tokens ?? estimateTokens(filtered);
       const compTokens = result.compressed_prompt_tokens ?? (result.compressed_prompt ? estimateTokens(result.compressed_prompt) : 0);
       const saved = origTokens - compTokens;

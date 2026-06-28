@@ -2,6 +2,7 @@
 import { readFileSync } from "fs";
 import { homedir } from "os";
 import { resolve } from "path";
+import { checkForUpdate, triggerBackgroundUpdate, reconcileIfStale } from "../src/update.js";
 
 interface StatsFile {
   totalSaved: number;
@@ -52,6 +53,9 @@ async function main(): Promise<void> {
     // use unknown
   }
 
+  // Self-heal harness config at most once a day (no-op otherwise).
+  reconcileIfStale();
+
   const stats = readStats();
   const totalSaved = stats.totalSaved ?? 0;
   const totalRequests = stats.totalRequests ?? 0;
@@ -68,6 +72,22 @@ async function main(): Promise<void> {
 
   parts.push(`↓ ${formatTokenCount(totalSaved)} saved`);
   if (totalRequests > 0) parts.push(`${totalRequests} reqs`);
+
+  try {
+    const update = await checkForUpdate();
+    if (update && update.kind === "minor") {
+      if (!update.alreadyTriggered) {
+        triggerBackgroundUpdate();
+        parts.push(`updating to v${update.latest}...`);
+      } else {
+        parts.push(`restart to activate v${update.latest}`);
+      }
+    } else if (update && update.kind === "major") {
+      parts.push(`v${update.latest} available: npm i -g @scaledown/claude-plugin@latest`);
+    }
+  } catch {
+    // non-fatal — never crash status line
+  }
 
   process.stdout.write(parts.join("  ·  "));
 }

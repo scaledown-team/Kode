@@ -1,0 +1,30 @@
+{
+  "name": "@scaledown/claude-plugin",
+  "version": "0.3.1",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "node ./dist/hooks/user-prompt-submit.js" }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "node ./dist/hooks/post-tool-use.js" }]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [{ "type": "command", "command": "node ./dist/hooks/pre-compact.js" }]
+      }
+    ]
+  },
+  "mcpServers": {
+    "scaledown": {
+      "command": "node",
+      "args": ["./dist/src/index.js"]
+    }
+  }
+}

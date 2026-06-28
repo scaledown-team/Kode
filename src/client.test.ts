@@ -24,11 +24,18 @@ const client = new ScaledownClient("test-key");
 beforeEach(() => mockFetch.mockClear());
 
 describe("compress", () => {
-  it("posts to /compress/raw/ and returns response", async () => {
+  it("posts to /compress/raw/ and flattens the nested results shape", async () => {
+    // Real wire shape: per-prompt fields nested under `results`.
     const body = {
-      compressed_prompt: "compressed",
-      original_prompt_tokens: 100,
-      compressed_prompt_tokens: 30,
+      results: {
+        success: true,
+        compressed_prompt: "compressed",
+        original_prompt_tokens: 100,
+        compressed_prompt_tokens: 30,
+        compression_ratio: 0.3,
+      },
+      total_original_tokens: 100,
+      total_compressed_tokens: 30,
       successful: true,
       latency_ms: 100,
       request_metadata: {
@@ -41,6 +48,8 @@ describe("compress", () => {
     mockOk(body);
     const result = await client.compress("ctx", "prompt", 0.3);
     expect(result.compressed_prompt).toBe("compressed");
+    expect(result.original_prompt_tokens).toBe(100);
+    expect(result.compressed_prompt_tokens).toBe(30);
     expect(mockFetch).toHaveBeenCalledWith(
       "https://api.scaledown.xyz/compress/raw/",
       expect.objectContaining({
